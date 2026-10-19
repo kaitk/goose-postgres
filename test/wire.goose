@@ -14,6 +14,7 @@ namespace wire;
 
 import std;
 import os;
+import hash from "github.com/kaitk/goose-hash@v0.0.2";
 import pg from "../";
 
 let DIGITS = "0123456789abcdef";
