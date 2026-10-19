@@ -7,6 +7,11 @@ import std;
 import base64;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 
+// The most PBKDF2 iterations a server may ask for: the client's time grows
+// with the count, so a hostile server could stall it. Postgres's default is
+// 4096 (scram_iterations).
+let MAX_ITERATIONS = 1000000;
+
 // Whether AuthenticationSASL's list of mechanisms has SCRAM-SHA-256.
 fn offers_scram(mechanisms: const u8[:]) -> bool {
     var p = 0;
@@ -84,6 +89,7 @@ fn scram_final(out: u8[>..]&, password: const u8[:], bare: const u8[:], nonce: c
     guard s.len > 0 && base64::decode(salt, s) else { return none, "the server's SCRAM salt isn't base64"; }
     let iterations, ok = parse_int(i);
     guard ok && iterations >= 1 else { return none, "the server's SCRAM iteration count is invalid"; }
+    guard iterations <= MAX_ITERATIONS else { return none, "the server's SCRAM iteration count is above 1,000,000"; }
 
     var salted: u8[32] = [0; 32];
     hash::pbkdf2_sha256(salted, password, salt, iterations);

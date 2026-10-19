@@ -14,6 +14,8 @@ then AuthenticationOk without SCRAM's final message: FAILED, used 9: the server 
 SASL: WANT_INPUT, used 24, need 5, sent 55 bytes
 a server nonce that doesn't extend the client's: FAILED, used 32: the server's SCRAM nonce doesn't extend the client's
 SASL: WANT_INPUT, used 24, need 5, sent 55 bytes
+an iteration count above MAX_ITERATIONS: FAILED, used 59: the server's SCRAM iteration count is above 1,000,000
+SASL: WANT_INPUT, used 24, need 5, sent 55 bytes
 SASLContinue: WANT_INPUT, used 56, need 5, sent 88 bytes
 a wrong server signature: FAILED, used 55: the server's SCRAM signature is wrong
 an ErrorResponse at startup: FAILED, used 59: the server refused the connection [28P01]

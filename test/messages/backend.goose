@@ -88,6 +88,10 @@ fn main() {
          check::message_of('R', check::auth(11, "r=abc,s=c2FsdA==,i=4096")));
     started(c);
     step("SASL", c, check::message_of('R', check::auth(10, "SCRAM-SHA-256\0\0")));
+    step("an iteration count above MAX_ITERATIONS", c,
+         check::message_of('R', check::auth(11, str("r=", c.nonce, "xyz,s=c2FsdA==,i=1000001"))));
+    started(c);
+    step("SASL", c, check::message_of('R', check::auth(10, "SCRAM-SHA-256\0\0")));
     step("SASLContinue", c, check::message_of('R', check::auth(11, str("r=", c.nonce, "xyz,s=c2FsdA==,i=4096"))));
     let zero: u8[32] = [0; 32];
     var zeros: u8[>..] = [];
