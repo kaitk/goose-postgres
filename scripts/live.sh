@@ -8,10 +8,11 @@
 # the commit below, which the script fetches into build/arena/ and checks;
 # scripts/live-init.sh adds a user that logs in with a cleartext password.
 #
-#   scripts/live.sh [--record]
+#   scripts/live.sh [--record] [TEST ...]
 #
-# --record writes each test's capture to test/data/ and its output to
-# test/expected/, for a new test or a new server version; review the diff.
+# Without TESTs it runs them all. --record writes each test's capture to
+# test/data/ and its output to test/expected/, for a new test or a new server
+# version; review the diff.
 # PG_PORT picks the host port (default 55432), PG_IMAGE the image (default
 # postgres:18). GOOSE or GOOSE_COMMIT names the compiler (default: the pinned
 # release, scripts/goose.sh). Needs Docker, Python 3, and curl.
@@ -22,7 +23,11 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 port=${PG_PORT:-55432}
 image=${PG_IMAGE:-postgres:18}
 record=
-[ "${1:-}" = --record ] && record=1
+if [ "${1:-}" = --record ]; then
+    record=1
+    shift
+fi
+tests=${*:-arena pipeline cleartext bad_password facade facade_login}
 
 arena_commit=2d85137
 seed_sum=f020c2c6851ea1c53cd1b90c94baadd5645b2fc3e4caed5b0daf71a61bff9e21
@@ -67,7 +72,7 @@ echo "$(docker exec "$name" postgres --version) on port $port"
 
 mkdir -p "$root/build/live"
 failed=0
-for t in arena pipeline cleartext bad_password; do
+for t in $tests; do
     exe=$root/build/live/$t
     "$GOOSE" build -o "$exe" "$root/test/session/$t.goose" >/dev/null
     cap=$root/build/live/$t.cap

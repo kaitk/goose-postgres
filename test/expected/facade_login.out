@@ -1,0 +1,4 @@
+not a URL: 08001 not a postgres:// URL
+wrong password: 28P01 password authentication failed for user "bench"
+a query after it: 08003 the connection broke: the server refused the connection
+replayed the whole capture: true

@@ -66,7 +66,13 @@ The areas:
   ([below](#session-tests)): HttpArena's `/async-db` query in both formats
   (`arena`, and `arena_bytewise`, which hands the server's bytes over one at a time),
   every decoded type and each outcome a pipeline's entry can have (`pipeline`), a
-  cleartext login (`cleartext`), and a wrong password (`bad_password`).
+  cleartext login (`cleartext`), a wrong password (`bad_password`), and the blocking
+  facade's calls, errors, and savepoints (`facade`), and its login (`facade_login`).
+- `test/facade/`: the facade against a server `test/fake.goose` fakes in the program,
+  for what a capture can't show: a connection lost in a result, a FATAL error, a send
+  that fails, and the statement cache's limits.
+- `test/compile/`: `// error:` fixtures, programs that must not compile: a facade call
+  outside `pg::run`, and a query inside another's row block.
 
 ### Session tests
 
@@ -83,6 +89,7 @@ its `test/expected/` file, so a replay and a live run agree:
 scripts/live.sh             # against a new container on port 55432
 PG_PORT=55433 scripts/live.sh
 scripts/live.sh --record    # also write test/data/*.cap and test/expected/*.out
+scripts/live.sh --record facade    # only the tests named
 ```
 
 It starts the `postgres:18` image as HttpArena does: user `bench`, password `bench`,
@@ -95,7 +102,8 @@ container's data is on a tmpfs, and the script removes the container when it end
 Goose has no sockets outside goose-http, so `scripts/relay.py` connects each program to
 the server: it starts the program with `--live`, sends what the program writes as
 `>hex` lines, answers each `<` line with the server's next bytes in hex, and passes the
-other lines through as the test's output. With `--record` it writes the capture.
+other lines through as the test's output. With `--record` it writes the capture. The
+facade's tests reach the same relay through `wire::Io`'s transport overloads.
 
 Record again after changing what a session sends, or to move to a new Postgres version,
 and read the diff of `test/expected/` before committing: the server's nonce, salt, and
@@ -106,4 +114,12 @@ backend key change in every capture, and nothing a test prints may.
 - A fixed-size value passed to an untyped parameter is copied: `decode_into(cfg.user,
   ...)` with `fn decode_into(out, ...)` appended to a copy of the field, and the
   startup message went out without a user. Take such a parameter as `out: B&`.
-- `null` is a keyword, so the NULL parameter is `pg::param_null`.
+- `null` is a keyword, so the NULL parameter is `pg::param_null`, and the facade's is
+  `pg::NULL`.
+- A transport's overloads are declared from another file as `fn pg::send(t:
+  wire::Io&, ...)`. The qualifier puts the whole declaration in namespace `pg`, its
+  body included, so the body names its own namespace's functions in full
+  (`wire::recv`).
+- `for e in pg::run() { ... } { ... }` doesn't parse as a loop over the errors: the
+  second block is taken as the loop's body and the first as `run`'s missing argument.
+  Bind the errors first, `let failed = pg::run() { ... };`.

@@ -49,6 +49,24 @@ let NONCE = "goose-postgres test nonce";
 // Sends out, and clears it.
 fn send(io: Io&, out: u8[>..]&) {
     guard out.len > 0;
+    send_bytes(io, out);
+    out.clear();
+}
+
+// Io as the facade's transport (facade.goose): sending checks the bytes
+// against the capture, receiving hands over its next bytes, and closing does
+// nothing, since the relay closes the socket when the program ends.
+fn pg::send(io: wire::Io&, bytes: const u8[:]) -> bool {
+    wire::send_bytes(io, bytes);
+    return true;
+}
+
+fn pg::receive(io: wire::Io&, into: u8[>..]&) -> bool { wire::recv(io, into) }
+
+fn pg::close(io: wire::Io&) {}
+
+fn send_bytes(io: Io&, out: const u8[:]) {
+    guard out.len > 0;
     if io.live {
         var line: u8[>..] = [];
         line.push('>');
@@ -73,7 +91,6 @@ fn send(io: Io&, out: u8[>..]&) {
         }
         io.pos += 5 + n;
     }
-    out.clear();
 }
 
 // Appends the server's next bytes to input: false when it closed.
