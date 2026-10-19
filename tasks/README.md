@@ -45,6 +45,12 @@ for the latest measurements.
 
 ## Order
 
-Task 001, the wire protocol, waits on outbound connections in goose-http. Its API
-should follow goose-sqlite's where the two databases allow it.
+Task 001, the wire protocol, is done but for its last step, which is task 005's. Two
+lines follow it, both waiting on goose-http's task 053:
+
+- For goose-rest's lane jobs: task 002, the blocking facade, then task 003, queries in
+  parallel on one connection, and task 004, the transaction block, which goose-sqlite's
+  task 003 matches.
+- For HttpArena: task 005, the pool on goose-http's outbound connections, which
+  answers `/async-db`.
 
