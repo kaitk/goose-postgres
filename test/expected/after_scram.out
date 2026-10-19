@@ -1,0 +1,3 @@
+the record starts with SASLFinal: ok
+FAILED the server asks for a cleartext password after SCRAM
+ready: false, sent all the client's records: true

@@ -6,6 +6,8 @@ a length of 3: FAILED, used 0: a message's length is out of range
 -- authentication the client refuses
 MD5: FAILED, used 13: MD5 password authentication isn't supported
 GSSAPI: FAILED, used 9: authentication request 7 isn't supported
+a cleartext password, by default: FAILED, used 9: the server asks for a cleartext password, which Config.allow_cleartext doesn't allow
+the password dropped when the connection broke: ok
 SASL with only SCRAM-SHA-256-PLUS: FAILED, used 29: the server offers no SASL mechanism but SCRAM-SHA-256-PLUS
 SASL: WANT_INPUT, used 24, need 5, sent 55 bytes
 then AuthenticationOk without SCRAM's final message: FAILED, used 9: the server skipped SCRAM's last message

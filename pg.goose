@@ -81,9 +81,12 @@ struct Conn {
     pid: i32 = 0,
     secret: u32 = 0,
     reason: u8[..120],
-    // Authentication: the password until it's used, SCRAM's client nonce and
-    // the server signature it expects.
+    // Authentication: the password until it's used, whether the server may
+    // ask for it in cleartext, whether SCRAM began, after which it may not,
+    // SCRAM's client nonce, and the server signature it expects.
     password: u8[..256],
+    cleartext: bool = false,
+    sasl: bool = false,
     nonce: u8[..64],
     server_signature: u8[32],
     // The queue: kinds[head], and the count after it, wait for answers; the
@@ -112,6 +115,7 @@ struct Bind { at: i64, count_at: i64 }
 fn start(c: Conn&, out: u8[>..]&, cfg: Config, nonce: const u8[:]) {
     c = Conn { .. };
     c.state = STARTING;
+    c.cleartext = cfg.allow_cleartext;
     c.password.append(cfg.password);
     var n: u8[>..] = [];
     base64::encode(n, nonce[..min(nonce.len, 45)]);
@@ -319,11 +323,7 @@ fn message(c: Conn&, kind: u8, body: const u8[:], out: u8[>..]&) -> i64 {
 // The messages before the first ReadyForQuery: authentication, then the
 // server's parameters and key.
 fn startup(c: Conn&, kind: u8, body: const u8[:], out: u8[>..]&) -> i64 {
-    if kind == 'E' {
-        c.state = BROKEN;
-        set_reason(c, "the server refused the connection");
-        return FAILED;
-    }
+    if kind == 'E' { return broken(c, "the server refused the connection"); }
     if kind == 'R' && body.len >= 4 && c.state != AUTHED { return authenticate(c, get32(body, 0), body[4..], out); }
     if kind == 'K' && c.state == AUTHED && body.len >= 8 {
         c.pid = get32(body, 0) as! i32;
@@ -346,19 +346,26 @@ fn authenticate(c: Conn&, code: i64, data: const u8[:], out: u8[>..]&) -> i64 {
         // before the client accepts it.
         guard c.state == STARTING else { return broken(c, "the server skipped SCRAM's last message"); }
         c.state = AUTHED;
-        c.password.clear();
+        forget_password(c);
         return WANT_INPUT;
     }
-    if code == 3 && c.state == STARTING {
+    if code == 3 {
+        // A server, or anyone between, that asks for the password in the
+        // clear after SCRAM began is downgrading the login.
+        guard !c.sasl else { return broken(c, "the server asks for a cleartext password after SCRAM"); }
+        guard c.cleartext else {
+            return broken(c, "the server asks for a cleartext password, which Config.allow_cleartext doesn't allow");
+        }
         let at = begin(out, 'p');
         cstr(out, c.password);
         end(out, at);
         return WANT_INPUT;
     }
-    if code == 10 && c.state == STARTING {
+    if code == 10 && c.state == STARTING && !c.sasl {
         guard offers_scram(data) else { return broken(c, "the server offers no SASL mechanism but SCRAM-SHA-256-PLUS"); }
         scram_first(c, out);
         c.state = SASL;
+        c.sasl = true;
         return WANT_INPUT;
     }
     if code == 11 && c.state == SASL {
@@ -384,8 +391,16 @@ fn fatal(body: const u8[:]) -> bool {
 
 fn broken(c: Conn&, why: const u8[:]) -> i64 {
     c.state = BROKEN;
+    forget_password(c);
     set_reason(c, why);
     return FAILED;
+}
+
+// Zeroes the password's bytes before dropping it, so a copy of the Conn, or
+// memory reused later, doesn't hold it.
+fn forget_password(c: Conn&) {
+    for k in c.password.len { c.password[k] = 0; }
+    c.password.clear();
 }
 
 fn unexpected(c: Conn&, what: const u8[:], kind: u8) -> i64 {

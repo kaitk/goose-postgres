@@ -35,7 +35,11 @@ fn main() {
     errors("a call after it", pg::run() { pg::exec(db, "SELECT 1"); });
 
     db.t = fake::Server { .. };
-    errors("connect again", pg::run() { pg::connect(db, "postgres://u:pw@localhost/db"); });
+    errors("connect by URL, which allows no cleartext password", pg::run() {
+        pg::connect(db, "postgres://u:pw@localhost/db");
+    });
+    db.t = fake::Server { .. };
+    errors("connect again", pg::run() { pg::connect(db, fake::config()); });
     db.t.fail_send = true;
     errors("a send that fails", pg::run() { pg::exec(db, "SELECT 1"); });
     errors("a call after it", pg::run() { pg::exec(db, "SELECT 1"); });

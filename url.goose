@@ -4,13 +4,17 @@ namespace pg;
 import std;
 
 // Where to connect and as whom. The host and port are for the caller's
-// socket; the rest go into the startup message and authentication.
+// socket; the rest go into the startup message and authentication. A server
+// that asks for the password in cleartext is refused unless allow_cleartext
+// is set: without TLS, anyone on the path could read it. The password stays
+// in Config for as long as the caller keeps it.
 struct Config {
     host: u8[..255],
     port: i64 = 5432,
     user: u8[..63],
     password: u8[..255],
     database: u8[..63],
+    allow_cleartext: bool = false,
 }
 
 // The settings in a URL of the form

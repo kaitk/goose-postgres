@@ -151,6 +151,7 @@ fn close<T>(db: Db<T>&) {
         let sent = send(db.t, out);
     }
     close(db.t);
+    forget_password(db.c);
     db.c = Conn { .. };
 }
 
@@ -449,10 +450,7 @@ fn transmit<T>(db: Db<T>&, out: const u8[:]) {
     }
 }
 
-fn gone<T>(db: Db<T>&, why: const u8[:]) {
-    db.c.state = BROKEN;
-    set_reason(db.c, why);
-}
+fn gone<T>(db: Db<T>&, why: const u8[:]) { broken(db.c, why); }
 
 // Fails with the error that ended the connection: the server's, when it
 // sent one, or CONNECTION_FAILURE with the reason.

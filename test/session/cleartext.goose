@@ -1,5 +1,5 @@
 // A user whose pg_hba.conf line is `password`: the server asks for the
-// password in cleartext.
+// password in cleartext, which the settings allow.
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
@@ -7,8 +7,10 @@ import wire from "../";
 
 fn main() {
     var io = wire::io(embed_file("../data/cleartext.cap"));
-    let cfg, ok = pg::parse_url("postgres://plain:plain%20pass@localhost/benchmark");
+    let parsed, ok = pg::parse_url("postgres://plain:plain%20pass@localhost/benchmark");
     assert(ok);
+    var cfg = parsed;
+    cfg.allow_cleartext = true;
     var c = pg::Conn { .. };
     var input: u8[>..] = [];
     var out: u8[>..] = [];

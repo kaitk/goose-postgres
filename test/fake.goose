@@ -110,9 +110,12 @@ fn reply(s: Server&, kind: u8, body: const u8[:], answer: u8[>..]&) {
     }
 }
 
-// The settings the fake server takes: any password, in cleartext.
+// The settings the fake server takes: any password, in cleartext, which they
+// allow.
 fn config() -> pg::Config {
-    let cfg, ok = pg::parse_url("postgres://u:pw@localhost/db");
+    let parsed, ok = pg::parse_url("postgres://u:pw@localhost/db");
     assert(ok);
+    var cfg = parsed;
+    cfg.allow_cleartext = true;
     return cfg;
 }

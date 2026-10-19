@@ -7,10 +7,12 @@ import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
 import check from "../";
 
-fn started(c: pg::Conn&) {
+fn started(c: pg::Conn&, cleartext: bool = true) {
     var out: u8[>..] = [];
-    let cfg, ok = pg::parse_url("postgres://u:pw@localhost/db");
+    let parsed, ok = pg::parse_url("postgres://u:pw@localhost/db");
     assert(ok);
+    var cfg = parsed;
+    cfg.allow_cleartext = cleartext;
     pg::start(c, out, cfg, "0123456789abcdefgh");
 }
 
@@ -72,6 +74,9 @@ fn main() {
     step("MD5", c, check::message_of('R', check::auth(5, "salt")));
     started(c);
     step("GSSAPI", c, check::message_of('R', check::auth(7, "")));
+    started(c, false);
+    step("a cleartext password, by default", c, check::message_of('R', check::auth(3, "")));
+    check::that("the password dropped when the connection broke", c.password.len == 0);
     started(c);
     step("SASL with only SCRAM-SHA-256-PLUS", c, check::message_of('R', check::auth(10, "SCRAM-SHA-256-PLUS\0\0")));
     started(c);
