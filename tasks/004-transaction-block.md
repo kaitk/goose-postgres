@@ -59,7 +59,12 @@ Checked against the pinned release's `docs/goose_spec.md` (`v2026.2`) with a spi
   ORMs do): the inner block runs `SAVEPOINT`, and `RELEASE` on success or `ROLLBACK TO`
   on failure, so its failure undoes only its own work. Postgres would otherwise warn on
   a second `BEGIN` and go on inside the first transaction. goose-sqlite does the same
-  (its task 003).
+  (its task 003). Its `sqlite::transaction`, in v0.0.2, is the reference: it checks
+  whether the connection is in a transaction, runs one savepoint name at every depth,
+  `ROLLBACK TO` then `RELEASE` on failure, fails the enclosing block rather than
+  return the error when the whole transaction has ended (so the outer block never
+  goes on in autocommit), and tests the cases in `test/transactions/savepoint.goose`
+  (its decisions record, 2026-10-19).
 - Whether `BEGIN` is pipelined with the block's first query, which saves a round
   trip, and what happens when the connection breaks before `COMMIT`'s answer: the
   outcome is unknown, and the error must say so.
