@@ -7,9 +7,11 @@ any number go out in one write, and each result comes back matched to its query.
 first user is [goose-rest](https://github.com/kaitk/goose-rest), on goose-http's
 outbound connections ([architecture](docs/architecture.md)).
 
-The protocol works against Postgres 18. The layers a program calls come next: a
-blocking facade for goose-rest's lanes, and a pool on goose-http's loop
-([tasks](tasks/README.md)). The repository isn't published yet.
+The protocol works against Postgres 18, and so does a blocking facade for goose-rest's
+lanes, over a transport the program supplies: `pg::query` with a block per row,
+`pg::exec`, and errors through `pg::run`. goose-http has no blocking socket for it yet
+(its task 053), so the tests drive it through a relay. A transaction block and a pool
+on goose-http's loop come next ([tasks](tasks/README.md)).
 
 ## Status
 
@@ -21,7 +23,9 @@ blocking facade for goose-rest's lanes, and a pool on goose-http's loop
 | 🟢 | Queries | The extended protocol: parse once, then bind with parameters and execute; results in text or binary. |
 | 🟢 | Pipelining | Many queries queued before any result. Each parse, query, and sync ends in one event carrying its number, including those the server skips after an error. |
 | 🟢 | Decoding | `int2`, `int4`, `int8`, `bool`, `text`, `varchar`, `bpchar`, `name`, `json`, and `jsonb`, in either format. |
-| 🟡 | A blocking facade | `pg::run`, `pg::fail`, and a `pg::transaction` block, for goose-rest's lane jobs (tasks 002 to 004). |
+| 🟢 | A blocking facade | For goose-rest's lane jobs: `pg::connect`, `pg::query` with a block per row, `pg::exec`, statements prepared once per connection, and errors through `pg::run` and `pg::fail`, over the program's transport. |
+| 🟡 | Transactions and queries in parallel | A `pg::transaction` block with savepoints, and several queries in one round trip on the facade (tasks 003 and 004). |
+| 🔴 | goose-http's blocking socket as the facade's transport | Once goose-http has one (its task 053). |
 | 🟡 | A pool | On goose-http's outbound connections, sized from `DATABASE_MAX_CONN`, for HttpArena's `/async-db` (task 005). |
 | 🔴 | TLS | Through goose-tls's client mode, for servers that ask for it. |
 | 🔴 | More types | Floats, `numeric`, dates and times, `uuid`, and arrays; `pg::bytes` gives their raw bytes. |
@@ -78,6 +82,26 @@ The root file declares goose-hash, as Goose asks of each package another package
 needs. `goose build` fetches it and compiles its small C shim with the C compiler it
 already uses.
 
+### The blocking facade
+
+On `main`, not yet in a release. A thread that runs no event loop, such as a
+goose-rest lane, calls the facade, which sends and waits on a transport the program
+supplies: any fixed-size value with `pg::send`, `pg::receive`, and `pg::close`
+overloads ([architecture](docs/architecture.md#the-transport)).
+
+```goose
+var db = pg::Db { t: socket, .. };
+var stock = 0;
+let failed = pg::run() {
+    pg::connect(db, "postgres://bench:bench@localhost:5432/benchmark");
+    pg::query(db, "SELECT quantity FROM items WHERE id = $1", 7) { r => stock = pg::int(r, 0); };
+    if stock == 0 { pg::fail("out of stock"); }
+    pg::exec(db, "UPDATE items SET quantity = quantity - 1 WHERE id = $1", 7);
+};
+for e in failed { print(e.code, ": ", e.message); }   // "23505", "P0001", ...
+pg::close(db);
+```
+
 ## API
 
 All in namespace `pg`. [Architecture](docs/architecture.md#the-api) has each function's
@@ -86,7 +110,7 @@ contract and the events' table.
 - `pg::parse_url(url) -> Config, bool`: the host, port, user, password, and database.
 - `pg::Conn { .. }`: a connection's state, fixed-size, so a pool keeps an array of them.
 - `pg::start(c, out, cfg, nonce)`: the startup message; `nonce` is SCRAM's client
-  nonce, such as 18 bytes from goose-hash's `hash::random_bytes` (from v0.0.3).
+  nonce, such as 18 bytes from goose-hash's `hash::random_bytes`.
 - `pg::step(c, input, out) -> event, body`: reads the server's messages up to the next
   event, answering authentication itself. `c.used` is what it consumed, and `c.seq` the
   entry the event belongs to.
@@ -100,6 +124,19 @@ contract and the events' table.
   field by its column's type and format, and `pg::columns_are(c, [pg::OID_INT4, ...])`
   checks the types once. `pg::column_name` names a column, `pg::field` reads an
   error's fields, and `pg::rows` a command's count.
+
+The facade ([architecture](docs/architecture.md#the-facade)):
+
+- `pg::Db { t: transport, .. }`: a connection over the program's transport.
+- `pg::connect(db, cfg or url)`: authenticates, with SCRAM's nonce from
+  `hash::random_bytes`.
+- `pg::query(db, sql, p1, ..., p8) { r => ... } -> i64`: up to eight parameters (bytes,
+  integers, bools, or `pg::NULL`), each row to the block, read with `pg::int(r, i)`,
+  `pg::text(r, i)`, and the other readers; returns the count.
+- `pg::exec(db, sql, p1, ..., p8) -> i64`: the count in the command's tag.
+- `pg::run() { ... } -> pg::Error[]`, `pg::fail(message)`, and
+  `pg::fail(code, message)`. `pg::Error` holds a SQLSTATE `code` and a `message`.
+- `pg::close(db)` and `pg::in_transaction(db)`.
 
 ## Credits
 
@@ -117,6 +154,7 @@ pg.goose       the package's entry: the connection, the messages the client writ
 scram.goose    SCRAM-SHA-256
 decode.goose   reading rows, columns, errors, and command tags
 url.goose      Config, and postgres:// URLs
+facade.goose   the blocking facade: Db, connect, query, exec, run, and fail
 test/          unit tests, and session tests that replay captures from Postgres
 scripts/       the Goose pin, the test scripts, and the live run in Docker with its relay
 docs/          architecture, decisions, development setup, Goose findings

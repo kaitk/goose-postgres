@@ -11,21 +11,23 @@ caller owns, and reads the server's messages from bytes the caller received. The
 caller owns the socket, so the same protocol runs under goose-http's event loop, under
 a blocking socket, or under a test that replays recorded bytes.
 
-Two layers go on top of it, neither built yet:
+Two layers go on top of it:
 
-- **A blocking facade, for lane jobs.** A goose-rest use case that runs several
-  queries runs as one job on a lane and calls `pg::run`, `pg::fail`, and
-  `pg::transaction`, as goose-sqlite's API does, so its code reads top to bottom.
-  Queries "in parallel" are pipelined on one connection.
-- **A pool on the worker's loop.** A route that runs one query, as HttpArena's
-  `/async-db` does, sends it on a connection that goose-http's loop owns, through its
-  outbound connections, and resumes when the rows arrive.
+- **A blocking facade, for lane jobs** ([below](#the-facade)). A goose-rest use case
+  that runs several queries runs as one job on a lane and calls `pg::query`,
+  `pg::exec`, `pg::run`, and `pg::fail`, as goose-sqlite's API does, so its code
+  reads top to bottom. It sends and waits on a transport the caller supplies. The
+  transaction block and queries "in parallel", pipelined on one connection, are
+  still to come.
+- **A pool on the worker's loop**, not built yet. A route that runs one query, as
+  HttpArena's `/async-db` does, sends it on a connection that goose-http's loop owns,
+  through its outbound connections, and resumes when the rows arrive.
 
 ## The API
 
 All of it is in namespace `pg`: `pg.goose` holds the connection, the messages the
 client writes, and `step`; `scram.goose` the authentication; `decode.goose` the
-readers of rows; `url.goose` the settings.
+readers of rows; `url.goose` the settings; `facade.goose` the blocking facade.
 
 ### Settings
 
@@ -45,8 +47,8 @@ readers of rows; `url.goose` the settings.
   `out`: protocol 3.0, the user, the database, and `client_encoding` `UTF8`, so every
   text arrives as UTF-8. It keeps the password until authentication uses it. `nonce`
   is SCRAM's client nonce: at least 18 bytes from a secure random source, new for each
-  connection, such as goose-hash's `hash::random_bytes` (from v0.0.3); the protocol
-  layer has no source of its own.
+  connection, such as goose-hash's `hash::random_bytes`, which `pg::connect` uses;
+  the protocol layer has no source of its own.
 - `pg::step(c, input, out) -> i64, const u8[:]`: reads the server's messages from the
   front of `input`, appends any reply authentication needs to `out`, and returns at the
   next event with the body of the message it came from, a slice of `input`. `c.used`
@@ -169,6 +171,126 @@ it.
   severity, `'D'` the detail. Empty when it has none.
 - `pg::rows(tag) -> i64`: the count in `DONE`'s tag: 5 for `SELECT 5` or `INSERT 0 5`.
 
+## The facade
+
+The facade runs the protocol for a thread that runs no event loop, such as a
+goose-rest lane: each call writes its entries, sends them, waits for the answers, and
+returns. A call that fails leaves through `return ... from pg::run`, so every call
+that can fail runs inside a `pg::run`, or the program doesn't compile.
+
+```goose
+var db = pg::Db { t: socket, .. };       // socket: the transport, below
+var names: u8[>..] = [];
+let failed = pg::run() {
+    pg::connect(db, cfg);
+    pg::query(db, "SELECT id, name FROM items WHERE price < $1", 50) { r =>
+        format(names, pg::int(r, 0), " ", pg::text(r, 1), "\n");
+    };
+    let n = pg::exec(db, "UPDATE items SET quantity = quantity - $1 WHERE id = $2", 1, 7);
+};
+for e in failed { print(e.code, ": ", e.message); }
+pg::close(db);
+```
+
+### The transport
+
+The facade sends and receives through a value of the caller's, `db.t`, of any
+fixed-size type `T`. It calls three functions on it, which whoever provides `T`
+declares into namespace `pg`:
+
+```goose
+fn pg::send(t: T&, bytes: const u8[:]) -> bool    // sends all of bytes; false if it can't
+fn pg::receive(t: T&, into: u8[>..]&) -> bool     // waits for at least one byte and
+                                                  // appends what arrived; false when
+                                                  // the connection closed or failed
+fn pg::close(t: T&)                               // closes it; never fails
+```
+
+The caller opens the transport to the `Config`'s host and port before
+`pg::connect`, and the transport's own timeouts bound each wait. goose-http's blocking
+socket is the transport for a lane, once goose-http has one (its task 053). The tests
+have two: `test/wire.goose` replays captures and runs live through the relay, and
+`test/fake.goose` fakes a server in the program.
+
+### Calls
+
+- `pg::Db<T>`: a connection: the transport `t`, the protocol's `Conn` as `c`, the
+  statements prepared on it, and the bytes received, which end it, so a struct that
+  holds a `Db` holds it last. Build it with `pg::Db { t: transport, .. }`.
+- `pg::connect(db, cfg)`, or `pg::connect(db, url)`: starts the session,
+  authenticates, and returns when the server is ready. SCRAM's nonce is 18 bytes from
+  goose-hash's `hash::random_bytes`. `pg::connect(db, cfg, nonce)` takes the nonce
+  given, for a test that replays a recorded session. A connection made again forgets
+  its statements.
+- `pg::query(db, sql, p1, ..., p8) { r => ... } -> i64`: runs `sql` with up to eight
+  parameters, for `$1` to `$8`, calls the block with each row, and returns the
+  count. A parameter is bytes, an integer, a bool, or `pg::NULL`, each sent as text,
+  which the server converts to the type it inferred for its `$n`.
+- `pg::exec(db, sql, p1, ..., p8) -> i64`: runs `sql` as `query` does, drops any rows,
+  and returns the count in its command tag: the rows an `INSERT`, `UPDATE`, or
+  `DELETE` changed, or a `SELECT` returned; 0 for a command without one, such as
+  `CREATE TABLE`.
+- `pg::close(db)`: sends `Terminate`, when the session is open, and closes the
+  transport. It never fails, so it runs anywhere, after an error too.
+- `pg::in_transaction(db) -> bool`: whether the last call left the connection in a
+  transaction, failed or not, from ReadyForQuery's status.
+- `pg::run() { ... } -> pg::Error[]`: runs the block, and returns an empty array, or
+  the error a call inside it failed with. The innermost `run` catches.
+- `pg::fail(message)` and `pg::fail(code, message)`: leave the innermost `run` with
+  the program's own error, `pg::RAISE_EXCEPTION` (`"P0001"`) or `code`.
+
+A statement with more than eight parameters goes through the protocol's entries on
+`db.c`.
+
+### Rows
+
+A query's block gets a `pg::Row`, a view into the connection's input, valid only
+inside the block: copy what is kept. Its fields read as the protocol's readers do,
+by their column's type, in the text format:
+
+- `pg::int(r, i)`, `pg::boolean(r, i)`, `pg::text(r, i)`, `pg::bytes(r, i)`, and
+  `pg::is_null(r, i)`;
+- `pg::field_count(r)` and `pg::column_type(r, i)`.
+
+`pg::text` reads any type, such as `numeric` or a date, as Postgres formats it. A
+facade call on the same connection inside the block doesn't compile: Goose reports
+"it shrinks db while db is still used", since the call reuses the bytes the row
+views. Read the rows into variables, then run the next query.
+
+### Statements
+
+The first time a connection runs a SQL text, the facade prepares it as a named
+statement, `gp<k>`, in the same round trip as the query; later runs send only its
+parameters. A text that fails to parse isn't kept. A `Db` keeps up to `STATEMENTS`
+(64) statements and `STATEMENT_TEXT` (16 KB) of their SQL; past either, a query
+parses as the unnamed statement each time it runs. A schema change can make a kept
+statement fail with `"0A000"` ("cached plan must not change result type"); connect
+again to drop them.
+
+### Errors
+
+`pg::Error` is `{ code: u8[..5], message: u8[] }`: a SQLSTATE and a message.
+
+| Code | Constant | When |
+|---|---|---|
+| the server's | | The server's error for the statement, such as `"23505"` for a duplicate key, or the one it ended the connection with, such as `"28P01"` for a wrong password |
+| `"P0001"` | `pg::RAISE_EXCEPTION` | `pg::fail(message)`: the program's own |
+| `"08006"` | `pg::CONNECTION_FAILURE` | The transport failed, or the server broke the protocol; the message says which |
+| `"08003"` | `pg::CONNECTION_DOES_NOT_EXIST` | A call on a connection that isn't open, or broke earlier |
+| `"08001"` | `pg::SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION` | `pg::connect(db, url)` with a URL that isn't a `postgres://` one |
+
+Constants name other codes a program tests for, each by its condition's name in
+Postgres's error codes appendix: `pg::UNIQUE_VIOLATION`, `pg::FOREIGN_KEY_VIOLATION`,
+`pg::NOT_NULL_VIOLATION`, `pg::CHECK_VIOLATION`, `pg::SERIALIZATION_FAILURE`,
+`pg::DEADLOCK_DETECTED`, and `pg::IN_FAILED_SQL_TRANSACTION`. `pg::class(code)` gives
+a code's class, such as `"23"` for every integrity constraint violation.
+
+A server's error fails the call once the server is ready again, so the connection
+goes on. A call that leaves early, because its row block failed, leaves answers
+unread, and the next call reads and drops them first. After the transport fails, the
+server sends a FATAL error, or it breaks the protocol, every call fails with
+`"08003"` until `pg::connect` runs again on a new transport.
+
 ## Authentication
 
 The server chooses, and `step` answers:
@@ -197,7 +319,9 @@ password is cleared from `c` once the server accepts it.
 
 ## Not yet
 
-- The blocking facade, `pg::transaction`, and the pool, as [Layers](#layers) says.
+- `pg::transaction`, queries in parallel on the facade, and the pool, as
+  [Layers](#layers) says.
+- A transport over goose-http's blocking socket, which goose-http doesn't have yet.
 - TLS: the package speaks to the server in the clear, so it suits a server on the same
   host or a private network.
 - Binary parameters, and readers for other types: floats, `numeric`, dates and times,

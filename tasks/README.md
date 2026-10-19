@@ -46,11 +46,12 @@ for the latest measurements.
 ## Order
 
 Task 001, the wire protocol, is done but for its last step, which is task 005's. Two
-lines follow it, both waiting on goose-http's task 053:
+lines follow it:
 
-- For goose-rest's lane jobs: task 002, the blocking facade, then task 003, queries in
-  parallel on one connection, and task 004, the transaction block, which goose-sqlite's
-  task 003 matches.
-- For HttpArena: task 005, the pool on goose-http's outbound connections, which
-  answers `/async-db`.
+- For goose-rest's lane jobs: task 002, the blocking facade, built over a transport
+  the caller supplies and waiting on goose-http's task 053 only for its socket; then
+  task 003, queries in parallel on one connection, and task 004, the transaction
+  block, which goose-sqlite's task 003 matches. Neither waits on goose-http.
+- For HttpArena: task 005, the pool on goose-http's outbound connections (its task
+  053), which answers `/async-db`.
 

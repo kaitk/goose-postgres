@@ -51,6 +51,21 @@ Checked against the pinned release's `docs/goose_spec.md` (`v2026.2`) with a spi
   a repository function that takes `tx: pg::Tx` can only be called with one a
   transaction's block handed out.
 
+## What the facade gives it
+
+Task 002's facade (`docs/architecture.md`, "The facade") has what goose-sqlite's
+`transaction` uses: `pg::exec(db, "SAVEPOINT ...")` and the rest as plain commands;
+`pg::in_transaction(db)` for whether to begin a savepoint rather than a transaction,
+from the last ReadyForQuery's status (`'E'`, a failed transaction, counts as in one);
+and a connection that stays usable after any failure: a call that a catcher leaves
+early, such as the block's `return e from tx_attempt` in the middle of a query's rows,
+leaves its answers unread, and the next call, the `ROLLBACK TO`, reads and drops them
+first. Prepared statements survive `ROLLBACK TO` in Postgres, so the facade's cache
+stays right. `test/session/facade.goose` runs a savepoint, a failure inside it,
+`ROLLBACK TO`, `RELEASE`, and `COMMIT` by hand. A broken connection fails every later
+call with `"08003"`, so the block's rollback fails too, and the error to return is the
+first one.
+
 ## To decide
 
 - The two forms, `pg::transaction<T>(db) { tx => ... value }` returning `T, Error[]`
