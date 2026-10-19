@@ -85,7 +85,8 @@ contract and the events' table.
 
 - `pg::parse_url(url) -> Config, bool`: the host, port, user, password, and database.
 - `pg::Conn { .. }`: a connection's state, fixed-size, so a pool keeps an array of them.
-- `pg::start(c, out, cfg, nonce)`: the startup message; `nonce` is SCRAM's client nonce.
+- `pg::start(c, out, cfg, nonce)`: the startup message; `nonce` is SCRAM's client
+  nonce, such as 18 bytes from goose-hash's `hash::random_bytes` (from v0.0.3).
 - `pg::step(c, input, out) -> event, body`: reads the server's messages up to the next
   event, answering authentication itself. `c.used` is what it consumed, and `c.seq` the
   entry the event belongs to.

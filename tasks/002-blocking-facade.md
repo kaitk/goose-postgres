@@ -20,10 +20,11 @@ returns the rows. It follows goose-sqlite's API where the two databases allow it
   five-character SQLSTATE where SQLite's is an integer, so the task decides between
   `code: u8[..5]` and an integer encoding.
 - **A connection**: `pg::connect(url)` opens the socket, runs `start` and `step` to
-  `READY`, and draws SCRAM's nonce from the system. `random_seed` in Goose's `os`
-  reads `/dev/urandom` on POSIX, but on Windows it falls back to a value mixed from
-  the clock, which isn't fit for a nonce; check what the pinned release does, and
-  record a finding if it still falls back.
+  `READY`, and takes SCRAM's nonce, 18 bytes, from goose-hash's
+  `hash::random_bytes`, the OS's secure random source, which aborts rather than
+  return weaker bytes. It's in goose-hash v0.0.3, so this task moves the goose-hash
+  pin to v0.0.3. Goose's own `random_seed` won't do: at `v2026.2` it mixes the
+  clocks on Windows (goose-hash's `docs/goose-findings.md`, 2026-10-19).
 - **Queries**: a call that runs one query and hands its rows to a block,
   `pg::query(db, sql) { row => ... }` or a statement with parameters, and one that
   returns a command's count. Parameters are the protocol's `param` overloads. Rows
@@ -54,6 +55,8 @@ that can fail keeps one untyped parameter (goose-sqlite's `docs/goose-findings.m
 
 - [ ] The API recorded in `docs/decisions.md` and `docs/architecture.md`
 - [ ] Queries with parameters, commands, and errors through `pg::run`, replayed and live
+- [ ] `pg::connect` takes SCRAM's nonce from `hash::random_bytes`, with goose-hash
+      pinned at v0.0.3
 - [ ] A call that can fail, outside `pg::run`, doesn't compile, with a test
 - [ ] goose-rest's best practices can port a multi-query use case on it (its task 052)
 - [ ] `scripts/test.sh` and `scripts/live.sh` pass

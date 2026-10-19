@@ -86,7 +86,8 @@ users, is [architecture](architecture.md).
 - **The caller supplies SCRAM's client nonce.** The package does no I/O and has no
   source of entropy, and a nonce from the caller makes a recorded exchange replayable
   in tests. The cost: a caller that passes predictable bytes weakens SCRAM against an
-  active attacker, so the facade and the pool take them from the system (2026-10-19).
+  active attacker, so the facade and the pool take them from the system, through
+  goose-hash's `hash::random_bytes` (2026-10-19).
 - **Authentication by SCRAM-SHA-256 or a cleartext password only.** Postgres hashes
   passwords with SCRAM by default since version 14, and HttpArena's Postgres 18
   container authenticates with it. Cleartext serves `password` lines in

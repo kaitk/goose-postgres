@@ -30,8 +30,8 @@ and a connection made again on a later request, without crashing.
   its connection, and resumes on `READY`; the rows are decoded straight into the JSON
   response, so none are kept. The state per request is measured against goose-rest's
   tiers.
-- **Nonces.** SCRAM's client nonce comes from the system for each connection (task
-  002's note on `random_seed`).
+- **Nonces.** SCRAM's client nonce comes from goose-hash's `hash::random_bytes` for
+  each connection, as in task 002.
 
 ## Steps
 

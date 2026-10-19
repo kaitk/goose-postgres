@@ -45,7 +45,8 @@ readers of rows; `url.goose` the settings.
   `out`: protocol 3.0, the user, the database, and `client_encoding` `UTF8`, so every
   text arrives as UTF-8. It keeps the password until authentication uses it. `nonce`
   is SCRAM's client nonce: at least 18 bytes from a secure random source, new for each
-  connection; the package has no source of its own.
+  connection, such as goose-hash's `hash::random_bytes` (from v0.0.3); the protocol
+  layer has no source of its own.
 - `pg::step(c, input, out) -> i64, const u8[:]`: reads the server's messages from the
   front of `input`, appends any reply authentication needs to `out`, and returns at the
   next event with the body of the message it came from, a slice of `input`. `c.used`
