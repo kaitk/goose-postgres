@@ -7,6 +7,8 @@ dated, with its reason and the trade-off that matters.
 
 - **After goose-sqlite.** SQLite needs no network code; this package waits on outbound
   connections in goose-http (2026-10-19).
+- **SCRAM-SHA-256's hashes from goose-hash (2026-10-19).** SHA-256, HMAC, and PBKDF2
+  come from that package, which WebSocket and JWT share.
 
 ## Proposed
 
@@ -22,9 +24,6 @@ dated, with its reason and the trade-off that matters.
 
 ## Open
 
-- Where SHA-256, HMAC, and PBKDF2 for SCRAM-SHA-256 come from. WebSocket's handshake
-  (SHA-1) and a JWT verifier (HMAC-SHA-256) need the same family, so a small hash
-  package may hold all of them (goose-rest's task 047, "Open").
 - How goose-rest hands a query to the loop that owns the connection and resumes the
   request with the rows: on the worker that serves the request, or on a lane that owns
   the pool.
