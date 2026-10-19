@@ -12,3 +12,19 @@ postgres://u%zz@h/db -> not a URL
 postgres://u@[::1/db -> not a URL
 mysql://u@h/db -> not a URL
 postgres://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@h/db -> not a URL
+-- a NUL byte, which would end a name in the startup message
+postgres://x%00options%00-c@h/db -> not a URL
+postgres://u@h/d%00b -> not a URL
+postgres://u:p%00w@h/db -> not a URL
+postgres://u\0@h/db, a raw NUL -> not a URL
+-- sslmode: TLS isn't supported yet
+postgres://u@h/db?sslmode=disable -> ok
+postgres://u@h/db?sslmode=allow -> ok
+postgres://u@h/db?sslmode=prefer -> ok
+postgres://u@h/db?sslmode=require -> the URL's sslmode needs TLS, which goose-postgres doesn't support yet
+postgres://u@h/db?sslmode=verify-ca -> the URL's sslmode needs TLS, which goose-postgres doesn't support yet
+postgres://u@h/db?sslmode=verify-full -> the URL's sslmode needs TLS, which goose-postgres doesn't support yet
+postgres://u@h/db?sslmode=on -> the URL's sslmode isn't disable, allow, prefer, require, verify-ca, or verify-full
+postgres://u@h/db?application_name=app&sslmode=prefer&connect_timeout=5 -> ok
+postgres://u@h/db?sslmode=disable&sslmode=require -> the URL's sslmode needs TLS, which goose-postgres doesn't support yet
+postgres://u@h/db?sslmodex=require -> ok

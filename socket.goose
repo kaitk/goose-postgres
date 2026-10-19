@@ -76,8 +76,8 @@ fn open(db: Db<Socket>&, cfg: Config, ms) {
 // Connects db with the settings in a postgres:// URL (parse_url), as open
 // does with a Config.
 fn open(db: Db<Socket>&, url: const u8[:], ms) {
-    let cfg, ok = parse_url(url);
-    guard ok else { fail(SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION, "not a postgres:// URL"); }
+    let cfg, why = url_settings(url);
+    guard why.len == 0 else { fail(SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION, why); }
     open(db, cfg, ms);
 }
 

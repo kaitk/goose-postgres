@@ -46,7 +46,9 @@ let CONNECTION_FAILURE = "08006";         // the transport failed, or the
                                           // connection broke
 let CONNECTION_DOES_NOT_EXIST = "08003";  // a call on a connection that isn't
                                           // connected, or broke earlier
-let SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION = "08001";   // not a postgres:// URL
+let SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION = "08001";   // settings that can't
+                                                             // be used, or a socket
+                                                             // that can't connect
 let UNIQUE_VIOLATION = "23505";
 let FOREIGN_KEY_VIOLATION = "23503";
 let NOT_NULL_VIOLATION = "23502";
@@ -120,8 +122,8 @@ fn connect<T>(db: Db<T>&, cfg: Config) {
 
 // Connects db with the settings in a postgres:// URL (parse_url).
 fn connect<T>(db: Db<T>&, url: const u8[:]) {
-    let cfg, ok = parse_url(url);
-    guard ok else { fail(SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION, "not a postgres:// URL"); }
+    let cfg, why = url_settings(url);
+    guard why.len == 0 else { fail(SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION, why); }
     connect(db, cfg);
 }
 

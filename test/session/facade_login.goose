@@ -1,5 +1,6 @@
-// The facade's connect with a URL that isn't one, then with the wrong
-// password: each error through pg::run, and no call works after.
+// The facade's connect with a URL that isn't one, with one whose sslmode needs
+// TLS, then with the wrong password: each error through pg::run, and no call
+// works after.
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
@@ -13,6 +14,7 @@ fn errors(label: const u8[:], failed: const pg::Error[:]) {
 fn main() {
     var db = pg::Db { t: wire::io(embed_file("../data/facade_login.cap")), .. };
     errors("not a URL", pg::run() { pg::connect(db, "mysql://bench@localhost/benchmark"); });
+    errors("sslmode=require", pg::run() { pg::connect(db, "postgres://bench@localhost/benchmark?sslmode=require"); });
     let cfg, ok = pg::parse_url("postgres://bench:wrong@localhost/benchmark");
     assert(ok);
     errors("wrong password", pg::run() { pg::connect(db, cfg, wire::NONCE); });
