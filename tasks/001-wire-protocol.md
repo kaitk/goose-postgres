@@ -1,7 +1,7 @@
 # 001: The wire protocol
 
-Status: todo (waits on outbound connections, goose-http's task 051, and on goose-hash's
-task 001 for SCRAM-SHA-256)
+Status: todo (waits on outbound connections, goose-http's task 053; goose-hash's task
+001, for SCRAM-SHA-256, is done in its `v0.0.1`)
 
 Startup, authentication, and the extended query protocol, enough for HttpArena's
 `/async-db` (goose-rest's task 047): api-4, api-16, gateway-64, gateway-h3, and
