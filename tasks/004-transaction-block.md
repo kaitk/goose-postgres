@@ -55,10 +55,11 @@ Checked against the pinned release's `docs/goose_spec.md` (`v2026.2`) with a spi
 
 - The two forms, `pg::transaction<T>(db) { tx => ... value }` returning `T, Error[]`
   and `pg::transaction(db) { tx => ... }` returning `Error[]`, as overloads, or one.
-- A transaction inside another: Postgres warns on a second `BEGIN` and goes on in the
-  first transaction, so the inner block can't fail at its `BEGIN` as goose-sqlite's
-  does. Use `SAVEPOINT` and `ROLLBACK TO` for the inner one, or make `Tx` the only way
-  in and give it no `transaction` overload.
+- A transaction inside another is a savepoint (agreed 2026-10-19, as Drizzle and other
+  ORMs do): the inner block runs `SAVEPOINT`, and `RELEASE` on success or `ROLLBACK TO`
+  on failure, so its failure undoes only its own work. Postgres would otherwise warn on
+  a second `BEGIN` and go on inside the first transaction. goose-sqlite does the same
+  (its task 003).
 - Whether `BEGIN` is pipelined with the block's first query, which saves a round
   trip, and what happens when the connection breaks before `COMMIT`'s answer: the
   outcome is unknown, and the error must say so.
