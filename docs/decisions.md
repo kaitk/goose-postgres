@@ -191,12 +191,18 @@ users, is [architecture](architecture.md).
   marks the connection broken: every later call fails with `"08003"` until
   `pg::connect` runs on a new transport. `pg::close` sends `Terminate` and closes the
   transport, and never fails, so it runs after any error (2026-10-19).
-
-## Open
-
-- What goose-http's task 053 offers a lane: a blocking client socket, opened to a
-  host and port with a timeout, that sends all of a buffer, receives what has arrived
-  into a growing buffer (waiting for at least one byte, with a timeout), and closes,
-  each reporting failure by its result rather than aborting. The facade's three
-  overloads map onto those calls one to one. Its type must be a fixed-size value, such
-  as a handle, since `Db` holds it by value.
+- **goose-http's outbound socket serves both the facade and the pool.** goose-http's
+  task 053 answered what a lane gets (2026-10-19): blocking calls, each with a time
+  limit in milliseconds (-1 for none), that report failure by their result rather
+  than abort. `http::connect(host, port, ms) -> Socket, Error` opens the connection,
+  `http::send_all(s, data, ms) -> Error` sends all of `data`, `http::recv(s, buf, ms)
+  -> i64` waits for bytes and returns how many it put into `buf`, 0 once the server
+  closed, `-ETIMEDOUT`, or `-code`, and `http::hangup(s&)` closes it. A host is
+  `localhost`, an IP address, or `unix:PATH` for a Unix socket. `http::Socket` is a
+  fixed-size handle, `{ fd }`, so `Db` holds it by value, and the facade's three
+  overloads map onto `send_all`, `recv`, and `hangup`. `recv` fills a slice, not a
+  growing buffer, so the overload grows the input before it reads. Task 005's pool
+  uses the same socket on the worker's loop, without blocking: `http::connect_start`,
+  `http::wait_socket` until the socket is readable or writable, then the
+  non-blocking `http::recv(s, buf)` and `http::send(s, data)`. goose-http runs that
+  half on `serve_epoll` only; `serve`'s loops fail `wait_socket` with `ENOSYS`.
