@@ -61,8 +61,9 @@ users, is [architecture](architecture.md).
   `exception`, for goose-sqlite's reason: a program's own `try` would catch the
   package's errors at the wrong type (2026-10-19, goose-rest's task 052).
 - **The facade's API follows goose-sqlite's; the protocol's doesn't.** `pg::run`,
-  `pg::fail`, `pg::transaction`, and the `Error` they carry match goose-sqlite's, so a
-  program's data access reads the same on either database. The protocol is events over
+  `pg::fail`, `pg::transaction`, and the `Error` they carry, but for its code's type
+  (below), match goose-sqlite's, so a program's data access reads the same on either
+  database. The protocol is events over
   bytes, which SQLite's synchronous calls have no counterpart for (2026-10-19).
 - **The package is `pg`.** The entry is `pg.goose`, and programs write `pg::`, as task
   052's sketch does (2026-10-19).
@@ -106,9 +107,83 @@ users, is [architecture](architecture.md).
   the recorded one, and in the live run `scripts/relay.py` connects it to a Postgres in
   Docker and can record a new capture. The relay is test-only Python, because Goose has
   no sockets outside goose-http and the package keeps none (2026-10-19).
+- **The facade runs over a transport the caller supplies.** `pg::Db<T>` holds a
+  transport of any fixed-size type `T`, and the facade calls three functions on it by
+  name: `pg::send(t, bytes) -> bool`, which sends all of `bytes`;
+  `pg::receive(t, into) -> bool`, which waits and appends at least one byte; and
+  `pg::close(t)`. `false` means the connection is gone, and the facade turns it into an
+  error through `pg::run`. Goose checks a generic body per instantiation and resolves
+  its names where it is defined, so the overloads for `T` are declared into namespace
+  `pg` (`fn pg::send(t: Socket&, ...)`) by whoever provides `T`, as goose-http's loop
+  reaches TLS through overloads that its module `http.tls` adds. The package keeps no
+  socket and imports no goose-http; the tests' transport replays captures and runs live
+  through the relay (`test/wire.goose`), and a faked server tests the failures
+  (`test/fake.goose`). goose-http's blocking socket plugs in with three one-line
+  overloads, in a module of this package that imports goose-http, as `http.tls` does
+  goose-tls, so only programs that use it declare goose-http. It rejects a socket opened
+  by the facade, which would make the package depend on goose-http before goose-http's
+  task 053 settles that socket, and function values the caller passes, which Goose
+  can't store in `Db` (spec §7.6). The cost: a transport's overloads live in another
+  package's namespace, and a type without them fails to compile where the facade
+  calls them, with "no matching overload for call to send" (2026-10-19).
+- **An error's code is the SQLSTATE, as text.** `pg::Error` is `{ code: u8[..5],
+  message: u8[] }`, goose-sqlite's two fields, with the code as Postgres sends it,
+  such as `"23505"`. SQLSTATEs have letters (`"28P01"`, `"P0001"`, `"XX000"`), so an
+  integer would need an encoding a program decodes before comparing against
+  Postgres's documentation, and the code would print as a number nobody can look up.
+  Constants name the codes a program tests for (`pg::UNIQUE_VIOLATION`), and
+  `pg::class(code)` gives the class, `"23"`, as `sqlite::primary` gives SQLite's
+  primary code. The facade's own errors take SQLSTATEs too: `pg::fail(message)`
+  raises `"P0001"`, Postgres's `raise_exception`; a transport that fails, or a server
+  that breaks the protocol, `"08006"`; a call on a connection that broke or isn't
+  open, `"08003"`; a server that ends the connection with an error, its own code. The
+  cost: comparing codes compares five bytes, not one integer, and `Error.code` has
+  another type than goose-sqlite's, so code that tests codes differs between the two
+  databases (2026-10-19).
+- **A query hands each row to a block.** `pg::query(db, sql, params...) { r => ... }`
+  calls the block with a `pg::Row` for each row as it arrives, and returns the count.
+  A row is a view into the connection's input, valid inside the block, so a large
+  result is never held whole, and the block copies what it keeps into the caller's
+  variables, as goose-sqlite's `step` loop does. Goose itself rejects a facade call on
+  the same connection inside the block ("it shrinks db while db is still used"),
+  since the next call reuses the bytes the row views. It rejects collecting rows into
+  an array the facade returns, which would allocate every row, and an iterator the
+  caller steps, which Goose's lack of stored function values and of references held
+  across calls makes awkward (2026-10-19).
+- **Parameters are a query's trailing arguments, up to eight.** Each is bytes, an
+  integer, a bool, or `pg::NULL`, sent in the text format as the protocol's `param`
+  sends it. Goose has neither variadic functions nor defaults for untyped parameters,
+  so `query` and `exec` have an overload per count from 0 to 8. A statement with more
+  parameters goes through the protocol's `bind` and `param`. It rejects an array of
+  tagged values, which every call would build (2026-10-19).
+- **Statements are prepared once per connection, by name.** The first time a
+  connection runs a SQL text, the facade sends `Parse` with the name `gp<k>`, in the
+  same write as the query, and keeps the text once the server answers `PARSED`; later
+  runs send only `Bind` and `Execute`. A parse that fails isn't kept. `Db` keeps up to
+  `STATEMENTS` (64) names and `STATEMENT_TEXT` (16 KB) of SQL inline, since a struct
+  has one resizable field and the input is it; past either, a query parses as the
+  unnamed statement each time, which costs a parse but stays correct. Prepared
+  statements outlive a rolled-back transaction in Postgres, so a savepoint's
+  `ROLLBACK TO` loses none of them. A connection made again forgets them
+  (2026-10-19).
+- **The facade asks for rows in the text format.** Every type then reads as
+  `pg::text`, including those the decoders don't know yet (`numeric`, dates, `uuid`),
+  where binary would give bytes a program would have to decode. Binary saves parsing
+  integers; the pool, which HttpArena measures, chooses its own format (2026-10-19).
+- **A failed call leaves the connection ready for the next.** A server's error is
+  held until the sync's `READY`, then fails the call, so the next call starts on an
+  idle connection. A failure that leaves a call early, from the row block or from a
+  transaction's catcher, leaves answers unread, and the next call reads and drops
+  them before it sends. A transport that fails, a FATAL error, or a protocol break
+  marks the connection broken: every later call fails with `"08003"` until
+  `pg::connect` runs on a new transport. `pg::close` sends `Terminate` and closes the
+  transport, and never fails, so it runs after any error (2026-10-19).
 
 ## Open
 
-- How the facade's socket is opened and blocks: goose-http's outbound connections
-  with a blocking mode for lanes, or a socket module of goose-http's for threads that
-  run no loop. goose-http's task 053 decides.
+- What goose-http's task 053 offers a lane: a blocking client socket, opened to a
+  host and port with a timeout, that sends all of a buffer, receives what has arrived
+  into a growing buffer (waiting for at least one byte, with a timeout), and closes,
+  each reporting failure by its result rather than aborting. The facade's three
+  overloads map onto those calls one to one. Its type must be a fixed-size value, such
+  as a handle, since `Db` holds it by value.
