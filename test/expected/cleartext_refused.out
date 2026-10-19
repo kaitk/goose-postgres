@@ -1,0 +1,2 @@
+FAILED the server asks for a cleartext password, which Config.allow_cleartext doesn't allow
+ready: false, password kept: false

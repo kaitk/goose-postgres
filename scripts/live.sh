@@ -30,7 +30,7 @@ if [ "${1:-}" = --record ]; then
     record=1
     shift
 fi
-tests=${*:-arena pipeline cleartext bad_password facade facade_login socket}
+tests=${*:-arena pipeline cleartext cleartext_refused bad_password facade facade_login socket}
 
 arena_commit=2d85137
 seed_sum=f020c2c6851ea1c53cd1b90c94baadd5645b2fc3e4caed5b0daf71a61bff9e21
