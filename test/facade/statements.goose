@@ -3,7 +3,7 @@
 // past STATEMENT_TEXT bytes of SQL, a query parses as the unnamed statement
 // each time. A connection made again prepares its statements again.
 import std;
-import hash from "github.com/kaitk/goose-hash@v0.0.3";
+import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
 import check from "../";
 import fake from "../";

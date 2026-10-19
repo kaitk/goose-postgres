@@ -1,7 +1,7 @@
 // The blocking facade over the session tests' I/O: a call before connecting,
 // a connection, and the facade's calls in wire::facade.
 import std;
-import hash from "github.com/kaitk/goose-hash@v0.0.3";
+import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
 import wire from "../";
 

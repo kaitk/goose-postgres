@@ -1,7 +1,7 @@
 // A parameter list as Bind writes it: each kind's bytes, and a count past
 // 32767, which Bind's 16-bit field holds unsigned, up to Postgres's 65535.
 import std;
-import hash from "github.com/kaitk/goose-hash@v0.0.3";
+import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
 import check from "../";
 

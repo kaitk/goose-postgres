@@ -1,7 +1,7 @@
 // A user whose pg_hba.conf line is `password`: the server asks for the
 // password in cleartext.
 import std;
-import hash from "github.com/kaitk/goose-hash@v0.0.3";
+import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
 import wire from "../";
 

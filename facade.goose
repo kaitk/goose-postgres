@@ -32,7 +32,7 @@
 namespace pg;
 
 import std;
-import hash from "github.com/kaitk/goose-hash@v0.0.3";
+import hash from "github.com/kaitk/goose-hash@v0.0.4";
 
 // Why a call failed: a SQLSTATE code, Postgres's own or one of the facade's
 // below, and a message.

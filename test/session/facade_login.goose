@@ -1,7 +1,7 @@
 // The facade's connect with a URL that isn't one, then with the wrong
 // password: each error through pg::run, and no call works after.
 import std;
-import hash from "github.com/kaitk/goose-hash@v0.0.3";
+import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
 import wire from "../";
 

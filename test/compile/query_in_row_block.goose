@@ -1,7 +1,7 @@
 // A query on the connection whose rows a block is reading doesn't compile:
 // the rows are views into the bytes the next call reuses.
 import std;
-import hash from "github.com/kaitk/goose-hash@v0.0.3";
+import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
 import wire from "../";
 

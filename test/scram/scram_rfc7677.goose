@@ -1,7 +1,7 @@
 // SCRAM-SHA-256's client-final-message and server signature for RFC 7677
 // §3's example exchange, and the server-first-messages the client refuses.
 import std;
-import hash from "github.com/kaitk/goose-hash@v0.0.3";
+import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
 import check from "../";
 
