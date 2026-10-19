@@ -91,9 +91,9 @@ The trap goose-sqlite recorded applies: a fully typed function that can fail bre
 A `return` out of the block, or a `return ... from` an enclosing function, leaves
 `transaction` without running `COMMIT` or `ROLLBACK`, so the connection stays in the
 transaction, as goose-sqlite documents for its block (2026-10-19). Document it the same
-way, and link goose-sqlite's feature request in its `docs/goose-findings.md` (a way for
-a function to run cleanup when a block leaves it early) once that entry lands; pull
-goose-sqlite then and take its wording.
+way, taking goose-sqlite v0.0.3's wording, and link its feature request in
+`docs/goose-findings.md`, "A function that takes a block can't run cleanup when the
+block returns out".
 
 ## Steps
 
