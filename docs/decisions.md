@@ -119,8 +119,10 @@ users, is [architecture](architecture.md).
   socket and imports no goose-http; the tests' transport replays captures and runs live
   through the relay (`test/wire.goose`), and a faked server tests the failures
   (`test/fake.goose`). goose-http's blocking socket plugs in with three one-line
-  overloads, in a module of this package that imports goose-http, as `http.tls` does
-  goose-tls, so only programs that use it declare goose-http. It rejects a socket opened
+  overloads, in an optional module of this package that imports goose-http, as
+  `http.tls` does goose-tls, so only programs that import that module declare
+  goose-http (agreed 2026-10-19, over the adapter in goose-http or in each program).
+  It rejects a socket opened
   by the facade, which would make the package depend on goose-http before goose-http's
   task 053 settles that socket, and function values the caller passes, which Goose
   can't store in `Db` (spec §7.6). The cost: a transport's overloads live in another
@@ -139,7 +141,7 @@ users, is [architecture](architecture.md).
   open, `"08003"`; a server that ends the connection with an error, its own code. The
   cost: comparing codes compares five bytes, not one integer, and `Error.code` has
   another type than goose-sqlite's, so code that tests codes differs between the two
-  databases (2026-10-19).
+  databases (2026-10-19; kept as text, agreed 2026-10-19).
 - **A query hands each row to a block.** `pg::query(db, sql, params...) { r => ... }`
   calls the block with a `pg::Row` for each row as it arrives, and returns the count.
   A row is a view into the connection's input, valid inside the block, so a large
@@ -150,12 +152,22 @@ users, is [architecture](architecture.md).
   an array the facade returns, which would allocate every row, and an iterator the
   caller steps, which Goose's lack of stored function values and of references held
   across calls makes awkward (2026-10-19).
-- **Parameters are a query's trailing arguments, up to eight.** Each is bytes, an
-  integer, a bool, or `pg::NULL`, sent in the text format as the protocol's `param`
-  sends it. Goose has neither variadic functions nor defaults for untyped parameters,
-  so `query` and `exec` have an overload per count from 0 to 8. A statement with more
-  parameters goes through the protocol's `bind` and `param`. It rejects an array of
-  tagged values, which every call would build (2026-10-19).
+- **Parameters are a query's trailing arguments, up to eight, or a `pg::Params`
+  list.** Each is bytes, an integer, a bool, or `pg::NULL`, sent in the text format as
+  the protocol's `param` sends it. Goose has neither variadic functions nor defaults
+  for untyped parameters, so `query` and `exec` have an overload per count from 0 to
+  8, the shorthand. For more, or for a list built in a loop, `var p = pg::Params
+  { .. }; pg::param(p, v); ... pg::query(db, sql, p) { r => ... }`, and
+  `pg::exec(db, sql, p)`, take up to 65535 parameters, Postgres's limit (agreed
+  2026-10-19). `Params` is `{ count, bytes: u8[>..] }`: each parameter is kept
+  already encoded as `Bind` writes it, its 32-bit length and its text, in the one
+  resizable field a struct may have, so a call copies the list into its `Bind` in
+  one append, and a list costs one buffer however many it holds. The same `param`
+  overload that adds a value to a `Bind` takes a `Params`, so no `query` overload is
+  added for it. Adding a parameter past 65535 aborts, as queuing past `QUEUE` does:
+  the count can't fit `Bind`'s 16-bit field. It rejects an array of tagged values,
+  one element per parameter, which an ADT array would store with a tag and a
+  variable-size payload each and encode again at every call (2026-10-19).
 - **Statements are prepared once per connection, by name.** The first time a
   connection runs a SQL text, the facade sends `Parse` with the name `gp<k>`, in the
   same write as the query, and keeps the text once the server answers `PARSED`; later
@@ -169,7 +181,8 @@ users, is [architecture](architecture.md).
 - **The facade asks for rows in the text format.** Every type then reads as
   `pg::text`, including those the decoders don't know yet (`numeric`, dates, `uuid`),
   where binary would give bytes a program would have to decode. Binary saves parsing
-  integers; the pool, which HttpArena measures, chooses its own format (2026-10-19).
+  integers; the pool, which HttpArena measures, chooses its own format. Text stays
+  until a measurement on the facade shows binary matters (agreed 2026-10-19).
 - **A failed call leaves the connection ready for the next.** A server's error is
   held until the sync's `READY`, then fails the call, so the next call starts on an
   idle connection. A failure that leaves a call early, from the row block or from a
