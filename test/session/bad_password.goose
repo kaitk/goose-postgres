@@ -1,7 +1,7 @@
 // SCRAM-SHA-256 with the wrong password: the server refuses the proof, and
 // the connection fails with its error.
 import std;
-import hash from "github.com/kaitk/goose-hash@v0.0.2";
+import hash from "github.com/kaitk/goose-hash@v0.0.3";
 import pg from "../../";
 import wire from "../";
 

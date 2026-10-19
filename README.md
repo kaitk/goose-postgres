@@ -36,7 +36,7 @@ the connection's state:
 
 ```goose
 import std;
-import hash from "github.com/kaitk/goose-hash@v0.0.2";
+import hash from "github.com/kaitk/goose-hash@v0.0.3";
 import pg from "github.com/kaitk/goose-postgres@v0.0.1";
 
 fn main() {
@@ -128,7 +128,7 @@ tasks/         task tracking (tasks/README.md)
 | What | Pin | Why |
 |---|---|---|
 | Goose compiler | `aardappel/goose` release `v2026.2` (`3ee3871`), which the scripts fetch ([setup](docs/development.md#set-up-the-goose-compiler)) | An official release builds the same on every platform; a commit is pinned only for a fix not yet released |
-| goose-hash | `github.com/kaitk/goose-hash@v0.0.2`, in each file that imports it | SHA-256, HMAC-SHA-256, and PBKDF2 for SCRAM |
+| goose-hash | `github.com/kaitk/goose-hash@v0.0.3`, in each file that imports it | SHA-256, HMAC-SHA-256, and PBKDF2 for SCRAM, and `hash::random_bytes` for its nonce |
 | Postgres | `postgres:18` in `scripts/live.sh`; the captures are from 18.0 | The version HttpArena runs |
 | Test data | HttpArena `2d85137`'s `data/pgdb-seed.sql`, checked by SHA-256 in `scripts/live.sh` | The `/async-db` profile's table |
 

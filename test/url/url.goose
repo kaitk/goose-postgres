@@ -1,7 +1,7 @@
 // postgres:// URLs: each part, the defaults, percent-decoding, an IPv6 host,
 // and URLs that aren't one.
 import std;
-import hash from "github.com/kaitk/goose-hash@v0.0.2";
+import hash from "github.com/kaitk/goose-hash@v0.0.3";
 import pg from "../../";
 
 fn show(url: const u8[:]) {

@@ -15,7 +15,7 @@ namespace pg;
 
 import std;
 import base64;
-import hash from "github.com/kaitk/goose-hash@v0.0.2";
+import hash from "github.com/kaitk/goose-hash@v0.0.3";
 import .scram;
 import .decode;
 import .url;

@@ -3,7 +3,7 @@
 // unsupported authentication to a server that breaks the protocol.
 import std;
 import base64;
-import hash from "github.com/kaitk/goose-hash@v0.0.2";
+import hash from "github.com/kaitk/goose-hash@v0.0.3";
 import pg from "../../";
 import check from "../";
 

@@ -3,7 +3,7 @@
 // after it, recovery at the next sync, a failed parse, an empty query, a
 // command's count, a row limit, a notice, and the transaction status.
 import std;
-import hash from "github.com/kaitk/goose-hash@v0.0.2";
+import hash from "github.com/kaitk/goose-hash@v0.0.3";
 import pg from "../../";
 import wire from "../";
 

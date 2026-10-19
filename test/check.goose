@@ -4,7 +4,7 @@
 namespace check;
 
 import std;
-import hash from "github.com/kaitk/goose-hash@v0.0.2";
+import hash from "github.com/kaitk/goose-hash@v0.0.3";
 import pg from "../";
 
 let DIGITS = "0123456789abcdef";

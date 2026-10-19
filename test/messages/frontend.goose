@@ -1,7 +1,7 @@
 // The messages the client writes, byte for byte, against the layouts in
 // PostgreSQL's "Message Formats", and the entry numbers they're queued with.
 import std;
-import hash from "github.com/kaitk/goose-hash@v0.0.2";
+import hash from "github.com/kaitk/goose-hash@v0.0.3";
 import pg from "../../";
 import check from "../";
 
