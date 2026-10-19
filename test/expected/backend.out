@@ -22,7 +22,7 @@ an ErrorResponse at startup: FAILED, used 59: the server refused the connection 
 and after it: FAILED, used 0: the server refused the connection
 -- a connection that's open
 the password, sent in cleartext: p\00\00\00\07pw\00
-five messages in one read, then READY: ok
+six messages in one read, then READY: ok
 BackendKeyData kept: ok
 the password dropped once used: ok
 a DataRow with nothing queued: FAILED, used 7: an unexpected message 'D'
@@ -42,3 +42,10 @@ event 2: ERROR, used 48 [23503]
 event 3: READY, used 6
   entry 1
 all of input consumed: ok
+-- client_encoding changed from UTF8
+ParameterStatus client_encoding LATIN1: FAILED, used 28: the server's client_encoding isn't UTF8, which the package reads text as
+at startup: FAILED, used 31: the server's client_encoding isn't UTF8, which the package reads text as
+-- a field past the row's last
+row of 5: field 2 12, field 4 14 text "14" bytes 2 bool false null false, field -1 null true
+row of 3: field 2 2, field 4 0 text "" bytes 0 bool false null true, field -1 null true
+field 200's type and format: ok

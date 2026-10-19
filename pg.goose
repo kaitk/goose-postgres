@@ -296,7 +296,8 @@ fn message(c: Conn&, kind: u8, body: const u8[:], out: u8[>..]&) -> i64 {
         if c.count > 0 { c.seq = c.next - c.count; }
         return NOTICE;
     }
-    if kind == 'S' || kind == 'A' || kind == 'v' || kind == 't' { return WANT_INPUT; }
+    if kind == 'S' { return parameter(c, body); }
+    if kind == 'A' || kind == 'v' || kind == 't' { return WANT_INPUT; }
     if c.state != OPEN { return startup(c, kind, body, out); }
     if kind == 'E' {
         if fatal(body) || c.count == 0 { return broken(c, "the server ended the connection"); }
@@ -407,6 +408,19 @@ fn authenticate(c: Conn&, code: i64, data: const u8[:], out: u8[>..]&) -> i64 {
     }
     if code == 5 { return broken(c, "MD5 password authentication isn't supported"); }
     return broken(c, str("authentication request ", code, " isn't supported"));
+}
+
+// ParameterStatus: the text readers take every text as UTF-8, so a
+// client_encoding other than the UTF8 the startup message set, as `SET
+// client_encoding` gives, breaks the connection.
+fn parameter(c: Conn&, body: const u8[:]) -> i64 {
+    let e = cstr_end(body, 0);
+    guard body[..e] == "client_encoding" else { return WANT_INPUT; }
+    let v = min(e + 1, body.len);
+    guard body[v..cstr_end(body, v)] == "UTF8" else {
+        return broken(c, "the server's client_encoding isn't UTF8, which the package reads text as");
+    }
+    return WANT_INPUT;
 }
 
 // Whether an ErrorResponse ends the connection: severity FATAL or PANIC.

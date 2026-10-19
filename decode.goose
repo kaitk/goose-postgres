@@ -17,10 +17,11 @@ let OID_BPCHAR: u32 = 1042;
 let OID_VARCHAR: u32 = 1043;
 let OID_JSONB: u32 = 3802;
 
-// The last RowDescription's column count, and column i's type and format.
+// The last RowDescription's column count, and column i's type and format: 0
+// and TEXT for a column it doesn't have.
 fn column_count(c: const Conn&) -> i64 { c.columns }
-fn column_type(c: const Conn&, i: i64) -> u32 { c.oid[i] }
-fn column_format(c: const Conn&, i: i64) -> i64 { c.format[i] }
+fn column_type(c: const Conn&, i: i64) -> u32 { if i >= 0 && i < c.columns { c.oid[i] } else { 0 } }
+fn column_format(c: const Conn&, i: i64) -> i64 { if i >= 0 && i < c.columns { c.format[i] } else { TEXT } }
 
 // Whether the last RowDescription's columns have exactly these types: a check
 // for COLUMNS, so that the rows after it decode without one each.
@@ -37,15 +38,16 @@ fn column_name(description: const u8[:], i: i64) -> const u8[:] {
     return description[p..cstr_end(description, p)];
 }
 
-// The number of fields in the last ROW.
+// The number of fields in the last ROW. The readers below read a field past
+// it, or below 0, as NULL: 0, false, or empty.
 fn field_count(c: const Conn&) -> i64 { c.fields }
 
-// Whether field i of the last ROW is NULL.
-fn is_null(c: const Conn&, i: i64) -> bool { c.len[i] < 0 }
+// Whether field i of the last ROW is NULL, or isn't in it.
+fn is_null(c: const Conn&, i: i64) -> bool { i < 0 || i >= c.fields || c.len[i] < 0 }
 
 // Field i of row, the last ROW's body, as the server sent it; empty for NULL.
 fn bytes(c: const Conn&, row: const u8[:], i: i64) -> const u8[:] {
-    guard c.len[i] >= 0 else { return row[..0]; }
+    guard !is_null(c, i) else { return row[..0]; }
     return row[c.at[i]..c.at[i] + c.len[i]];
 }
 
@@ -53,7 +55,7 @@ fn bytes(c: const Conn&, row: const u8[:], i: i64) -> const u8[:] {
 // for NULL, or for text that isn't an integer.
 fn int(c: const Conn&, row: const u8[:], i: i64) -> i64 {
     let v = bytes(c, row, i);
-    if c.format[i] == BINARY {
+    if column_format(c, i) == BINARY {
         if v.len == 2 { return get16(v, 0); }
         if v.len == 4 { return get32(v, 0); }
         if v.len == 8 { return (get32(v, 0) << 32) | (get32(v, 4) & 0xffffffff); }
@@ -67,7 +69,7 @@ fn int(c: const Conn&, row: const u8[:], i: i64) -> i64 {
 fn boolean(c: const Conn&, row: const u8[:], i: i64) -> bool {
     let v = bytes(c, row, i);
     guard v.len == 1 else { return false; }
-    return if c.format[i] == BINARY { v[0] != 0 } else { v[0] == 't' };
+    return if column_format(c, i) == BINARY { v[0] != 0 } else { v[0] == 't' };
 }
 
 // Field i as text: a text, varchar, bpchar, name, json, or jsonb column, in
@@ -75,7 +77,7 @@ fn boolean(c: const Conn&, row: const u8[:], i: i64) -> bool {
 // gives its JSON text in both. Empty for NULL.
 fn text(c: const Conn&, row: const u8[:], i: i64) -> const u8[:] {
     let v = bytes(c, row, i);
-    if c.format[i] == BINARY && c.oid[i] == OID_JSONB && v.len > 0 && v[0] == 1 { return v[1..]; }
+    if column_format(c, i) == BINARY && column_type(c, i) == OID_JSONB && v.len > 0 && v[0] == 1 { return v[1..]; }
     return v;
 }
 

@@ -42,6 +42,7 @@ fn opened(c: pg::Conn&) {
     check::message(input, 'R', check::auth(3, ""));
     check::message(input, 'R', check::auth(0, ""));
     check::message(input, 'S', "server_version\x0018.0\0");
+    check::message(input, 'S', "client_encoding\0UTF8\0");
     check::message(input, 'K', "\0\0\x01\x02\0\0\0\x07");
     check::message(input, 'Z', "I");
     var out: u8[>..] = [];
@@ -52,7 +53,7 @@ fn opened(c: pg::Conn&) {
         return;
     }
     check::bytes("the password, sent in cleartext", out, "p\0\0\0\x07pw\0");
-    check::that("five messages in one read, then READY", ok);
+    check::that("six messages in one read, then READY", ok);
     check::that("BackendKeyData kept", c.pid == 258 && c.secret == 7);
     check::that("the password dropped once used", c.password.len == 0);
 }
@@ -141,4 +142,53 @@ fn main() {
         at += c.used;
     }
     check::that("all of input consumed", at == input.len);
+
+    print("-- client_encoding changed from UTF8");
+    opened(c);
+    step("ParameterStatus client_encoding LATIN1", c, check::message_of('S', "client_encoding\0LATIN1\0"));
+    started(c);
+    step("at startup", c, check::message_of('S', "client_encoding\0SQL_ASCII\0"));
+
+    print("-- a field past the row's last");
+    opened(c);
+    pg::execute(c, out, pg::bind(out, ""));
+    var d: u8[>..] = [];
+    pg::put16(d, 5);
+    for k in 5 {
+        format(d, "c", k, "\0");
+        pg::put32(d, 0);
+        pg::put16(d, 0);
+        pg::put32(d, pg::OID_INT4 as i64);
+        pg::put16(d, 4);
+        pg::put32(d, -1);
+        pg::put16(d, 0);
+    }
+    var rows: u8[>..] = [];
+    check::message(rows, 'T', d);
+    var five: u8[>..] = [];
+    pg::put16(five, 5);
+    for k in 5 {
+        pg::put32(five, 2);
+        format(five, k + 10);
+    }
+    check::message(rows, 'D', five);
+    var three: u8[>..] = [];
+    pg::put16(three, 3);
+    for k in 3 {
+        pg::put32(three, 1);
+        format(three, k);
+    }
+    check::message(rows, 'D', three);
+    at = 0;
+    for k in 3 {
+        var o: u8[>..] = [];
+        let e, body = pg::step(c, rows[at..], o);
+        at += c.used;
+        guard e == pg::ROW else { continue; }
+        print("row of ", pg::field_count(c), ": field 2 ", pg::int(c, body, 2), ", field 4 ",
+              pg::int(c, body, 4), " text \"", pg::text(c, body, 4), "\" bytes ",
+              pg::bytes(c, body, 4).len, " bool ", pg::boolean(c, body, 4), " null ",
+              pg::is_null(c, 4), ", field -1 null ", pg::is_null(c, -1));
+    }
+    check::that("field 200's type and format", pg::column_type(c, 200) == 0 && pg::column_format(c, 200) == pg::TEXT);
 }
