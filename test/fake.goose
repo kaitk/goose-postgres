@@ -1,6 +1,7 @@
 // A server faked in the program, as the facade's transport (facade.goose),
 // for what recorded sessions can't show: a connection lost in the middle of
-// a result, a FATAL error, a send that fails, and many statements. It reads
+// a result, a FATAL error, a send that fails, many statements, and statements
+// the server dropped. It reads
 // each message the client sends and queues the answers a Postgres server
 // gives, which receive hands over all at once.
 namespace fake;
@@ -22,6 +23,11 @@ struct Server {
     fail_send: bool = false,
     closed: bool = false,
     started: bool = false,
+    // Whether the server has dropped its prepared statements, as DISCARD ALL
+    // does, so the next Bind of a named one fails, and whether it skips
+    // messages up to a Sync after an error.
+    discarded: bool = false,
+    skipping: bool = false,
     // The Parse messages seen, and the name of the last one.
     parses: i64 = 0,
     name: u8[..16],
@@ -61,6 +67,7 @@ fn pg::receive(s: fake::Server&, into: u8[>..]&) -> bool {
 fn pg::close(s: fake::Server&) { s.closed = true; }
 
 fn reply(s: Server&, kind: u8, body: const u8[:], answer: u8[>..]&) {
+    if s.skipping && kind != 'S' { return; }
     if kind == 'p' {
         check::message(answer, 'R', check::auth(0, ""));
         check::message(answer, 'Z', "I");
@@ -70,6 +77,13 @@ fn reply(s: Server&, kind: u8, body: const u8[:], answer: u8[>..]&) {
         s.name.append(body[..pg::cstr_end(body, 0)]);
         check::message(answer, '1', "");
     } else if kind == 'B' {
+        let statement = body[pg::cstr_end(body, 0) + 1..];
+        if s.discarded && statement[..pg::cstr_end(statement, 0)].len > 0 {
+            s.discarded = false;
+            s.skipping = true;
+            check::message(answer, 'E', "SERROR\0VERROR\0C26000\0Mprepared statement does not exist\0\0");
+            return;
+        }
         check::message(answer, '2', "");
     } else if kind == 'D' {
         if s.rows > 0 || s.mode != ROWS {
@@ -106,6 +120,7 @@ fn reply(s: Server&, kind: u8, body: const u8[:], answer: u8[>..]&) {
         format(tag, "SELECT ", n, "\0");
         check::message(answer, 'C', tag);
     } else if kind == 'S' {
+        s.skipping = false;
         check::message(answer, 'Z', "I");
     }
 }

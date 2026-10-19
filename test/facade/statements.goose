@@ -1,7 +1,8 @@
 // Statements prepared once by name, against a faked server: a statement
 // parses on its first run only, until STATEMENTS are kept, and past that, or
 // past STATEMENT_TEXT bytes of SQL, a query parses as the unnamed statement
-// each time. A connection made again prepares its statements again.
+// each time. A connection made again prepares its statements again, and so
+// does one whose server dropped them, after the call that finds out.
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
@@ -45,6 +46,14 @@ fn main() {
     for k in pg::STATEMENT_TEXT { long.push('x'); }
     run(db, long);
     run(db, long);
+    run(db, "SELECT 0");
+
+    print("-- the server drops its statements, as DISCARD ALL does");
+    db.t.discarded = true;
+    let gone = pg::run() { pg::exec(db, "SELECT 0"); };
+    for e in gone { print("SELECT 0: ", e.code, " ", e.message); }
+    print("statements kept: ", db.statements);
+    run(db, "SELECT 0");
     run(db, "SELECT 0");
     pg::close(db);
 }

@@ -10,3 +10,8 @@ SELECT 0: parsed as "gp0"
 SELECT 1 -- xxxxxxxxxxxx: parsed as ""
 SELECT 1 -- xxxxxxxxxxxx: parsed as ""
 SELECT 0: prepared already
+-- the server drops its statements, as DISCARD ALL does
+SELECT 0: 26000 prepared statement does not exist
+statements kept: 0
+SELECT 0: parsed as "gp0"
+SELECT 0: prepared already

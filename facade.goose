@@ -50,6 +50,8 @@ let SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION = "08001";   // settings that ca
                                                              // be used, or a socket
                                                              // that can't connect
 let CHARACTER_NOT_IN_REPERTOIRE = "22021";   // SQL with a NUL byte
+let INVALID_SQL_STATEMENT_NAME = "26000";    // a prepared statement the
+                                             // server no longer has
 let UNIQUE_VIOLATION = "23505";
 let FOREIGN_KEY_VIOLATION = "23503";
 let NOT_NULL_VIOLATION = "23502";
@@ -352,6 +354,7 @@ fn entry<T>(db: Db<T>&, out: u8[>..]&, sql: const u8[:]) -> Bind {
     while db.c.count > 0 {
         let e, body = next(db);
         if e == PARSED { prepared(db); }
+        if e == ERROR { stale(db, body); }
         if e == FAILED { lost(db, body); }
     }
     var name: u8[>..] = [];
@@ -390,6 +393,15 @@ fn prepared<T>(db: Db<T>&) {
     db.statements++;
 }
 
+// An error that says a statement db kept is gone from the server, as after
+// DISCARD ALL or DEALLOCATE ALL: forgets them all, so each is prepared again
+// the next time it runs.
+fn stale<T>(db: Db<T>&, error: const u8[:]) {
+    guard field(error, 'C') == INVALID_SQL_STATEMENT_NAME;
+    db.statements = 0;
+    db.sql.clear();
+}
+
 // Executes b, syncs, sends out, and reads the answers up to the sync's
 // READY: each row to F, and the first error, which fails the call once the
 // connection is ready again. Returns the count in the command tag.
@@ -410,6 +422,7 @@ fn finish<F, T>(db: Db<T>&, out: u8[>..]&, b: Bind) -> i64 {
         } else if e == PARSED {
             prepared(db);
         } else if e == ERROR {
+            stale(db, body);
             if !failed {
                 failed = true;
                 code.append(field(body, 'C')[..min(field(body, 'C').len, 5)]);
