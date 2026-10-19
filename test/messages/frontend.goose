@@ -55,4 +55,25 @@ fn main() {
     pg::terminate(out);
     check::bytes("Terminate", out, "X\0\0\0\x04");
     check::eq("room after four entries", pg::room(c), pg::QUEUE - 4);
+    out.clear();
+
+    print("-- a NUL byte in a string, which would end it early");
+    var injected = pg::Config { .. };
+    injected.user.append("x\0options\0-c");
+    pg::start(c, out, injected, "0123456789abcdefgh");
+    check::that("a user with a NUL: nothing written", out.len == 0);
+    print("  ", c.reason);
+    c = pg::Conn { .. };
+    c.state = pg::OPEN;
+    out.append("kept");
+    check::eq("Parse of SQL with a NUL", pg::parse(c, out, "", "SELECT 1\0; DROP TABLE t"), -1);
+    check::bytes("  out", out, "kept");
+    print("  ", c.reason, ", ready: ", pg::ready(c));
+    c = pg::Conn { .. };
+    c.state = pg::OPEN;
+    let bad = pg::bind(out, "s\0x");
+    pg::param(out, bad, "ab");
+    check::eq("Bind of a name with a NUL, at execute", pg::execute(c, out, bad), -1);
+    check::bytes("  out", out, "kept");
+    print("  ", c.reason, ", ready: ", pg::ready(c));
 }

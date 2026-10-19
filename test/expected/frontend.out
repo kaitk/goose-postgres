@@ -11,3 +11,12 @@ Sync's entry: 3
 Sync: S\00\00\00\04
 Terminate: X\00\00\00\04
 room after four entries: 1020
+-- a NUL byte in a string, which would end it early
+a user with a NUL: nothing written: ok
+  the user or database name holds a NUL byte
+Parse of SQL with a NUL: -1
+  out: kept
+  a statement's name or SQL holds a NUL byte, ready: false
+Bind of a name with a NUL, at execute: -1
+  out: kept
+  a statement's or portal's name holds a NUL byte, ready: false

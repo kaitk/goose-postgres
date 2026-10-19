@@ -49,6 +49,7 @@ let CONNECTION_DOES_NOT_EXIST = "08003";  // a call on a connection that isn't
 let SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION = "08001";   // settings that can't
                                                              // be used, or a socket
                                                              // that can't connect
+let CHARACTER_NOT_IN_REPERTOIRE = "22021";   // SQL with a NUL byte
 let UNIQUE_VIOLATION = "23505";
 let FOREIGN_KEY_VIOLATION = "23503";
 let NOT_NULL_VIOLATION = "23502";
@@ -136,6 +137,7 @@ fn connect<T>(db: Db<T>&, cfg: Config, nonce: const u8[:]) {
     db.statements = 0;
     db.sql.clear();
     db.input.clear();
+    guard db.c.state != BROKEN else { fail(SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION, db.c.reason); }
     transmit(db, out);
     loop {
         let e, body = next(db);
@@ -342,6 +344,9 @@ fn entry<T>(db: Db<T>&, out: u8[>..]&, sql: const u8[:]) -> Bind {
         if db.c.state == BROKEN { fail(CONNECTION_DOES_NOT_EXIST, str("the connection broke: ", db.c.reason)); }
         fail(CONNECTION_DOES_NOT_EXIST, "the connection isn't open");
     }
+    // Refused before anything is sent, so the connection stays usable;
+    // Postgres refuses a NUL in text with the same code.
+    guard !has_nul(sql) else { fail(CHARACTER_NOT_IN_REPERTOIRE, "the SQL holds a NUL byte"); }
     // A call that failed in its block, or in a transaction's, left its
     // answers unread.
     while db.c.count > 0 {

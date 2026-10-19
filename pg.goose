@@ -105,13 +105,15 @@ struct Conn {
     len: i32[MAX_COLUMNS],
 }
 
-// A Bind message being written: where its length and its parameter count are.
-struct Bind { at: i64, count_at: i64 }
+// A Bind message being written: where its length and its parameter count
+// are, and whether its names were written, which execute checks.
+struct Bind { at: i64, count_at: i64, ok: bool }
 
 // Starts c on a connection the caller opened: appends the startup message to
 // out, for protocol 3.0 with client_encoding UTF8, and keeps cfg's password
 // for the authentication the server asks for. nonce is SCRAM's client nonce:
-// at least 18 bytes the caller drew from a secure source, used once.
+// at least 18 bytes the caller drew from a secure source, used once. A user
+// or database with a NUL breaks c, with out unchanged.
 fn start(c: Conn&, out: u8[>..]&, cfg: Config, nonce: const u8[:]) {
     c = Conn { .. };
     c.state = STARTING;
@@ -124,10 +126,15 @@ fn start(c: Conn&, out: u8[>..]&, cfg: Config, nonce: const u8[:]) {
     put32(out, 0);
     put32(out, 196608);
     cstr(out, "user");
-    cstr(out, cfg.user);
+    var ok = cstr(out, cfg.user);
     if cfg.database.len > 0 {
         cstr(out, "database");
-        cstr(out, cfg.database);
+        ok = ok && cstr(out, cfg.database);
+    }
+    guard ok else {
+        out.resize(at);
+        broken(c, "the user or database name holds a NUL byte");
+        return;
     }
     cstr(out, "client_encoding");
     cstr(out, "UTF8");
@@ -143,11 +150,15 @@ fn ready(c: const Conn&) -> bool { c.state == OPEN }
 fn room(c: const Conn&) -> i64 { QUEUE - c.count }
 
 // Queues a Parse of sql as the statement name, "" for the unnamed one, and
-// returns its number. The server infers the parameters' types.
+// returns its number. The server infers the parameters' types. A name or
+// SQL with a NUL breaks c, and returns -1 with out unchanged.
 fn parse(c: Conn&, out: u8[>..]&, name: const u8[:], sql: const u8[:]) -> i64 {
     let at = begin(out, 'P');
-    cstr(out, name);
-    cstr(out, sql);
+    guard cstr(out, name) && cstr(out, sql) else {
+        out.resize(at - 1);
+        broken(c, "a statement's name or SQL holds a NUL byte");
+        return -1;
+    }
     put16(out, 0);
     end(out, at);
     return queue(c, PARSE);
@@ -155,15 +166,22 @@ fn parse(c: Conn&, out: u8[>..]&, name: const u8[:], sql: const u8[:]) -> i64 {
 
 // Starts a Bind of statement to portal ("" for the unnamed ones). Add each
 // parameter in order with param or param_null, then queue the query with
-// execute.
+// execute, which breaks c, and returns -1 with the Bind dropped from out,
+// when either name has a NUL.
 fn bind(out: u8[>..]&, statement: const u8[:], portal: const u8[:] = "") -> Bind {
     let at = begin(out, 'B');
-    cstr(out, portal);
-    cstr(out, statement);
+    let ok = cstr(out, portal) && cstr(out, statement);
+    if !ok {
+        // Empty names keep the message's layout for the parameters that
+        // follow, until execute drops it all.
+        out.resize(at + 4);
+        cstr(out, "");
+        cstr(out, "");
+    }
     put16(out, 0);              // no format codes: every parameter is text
     let count_at = out.len;
     put16(out, 0);
-    return Bind { at: at, count_at: count_at };
+    return Bind { at: at, count_at: count_at, ok: ok };
 }
 
 // Adds a parameter to b, in the text format: bytes as they are, an integer
@@ -195,6 +213,11 @@ fn param_null(out: u8[>..]&, b: Bind) {
 // returns the query's number. Its events: COLUMNS, a ROW per row, then DONE,
 // or SUSPENDED at max_rows; ERROR or SKIPPED in place of any of them.
 fn execute(c: Conn&, out: u8[>..]&, b: Bind, format: i64 = TEXT, max_rows: i64 = 0) -> i64 {
+    guard b.ok else {
+        out.resize(b.at - 1);
+        broken(c, "a statement's or portal's name holds a NUL byte");
+        return -1;
+    }
     put16(out, 1);
     put16(out, format);
     end(out, b.at);
@@ -357,7 +380,10 @@ fn authenticate(c: Conn&, code: i64, data: const u8[:], out: u8[>..]&) -> i64 {
             return broken(c, "the server asks for a cleartext password, which Config.allow_cleartext doesn't allow");
         }
         let at = begin(out, 'p');
-        cstr(out, c.password);
+        guard cstr(out, c.password) else {
+            out.resize(at - 1);
+            return broken(c, "the password holds a NUL byte");
+        }
         end(out, at);
         return WANT_INPUT;
     }
@@ -448,9 +474,20 @@ fn count(out: u8[>..]&, b: Bind, added: i64 = 1) {
     out[b.count_at + 1] = n as! u8;
 }
 
-fn cstr(out: u8[>..]&, s: const u8[:]) {
+// Appends s and its NUL, or nothing, returning false, when s holds a NUL:
+// the server would read s as ending there, and the rest as the message's
+// next fields. A writer given such a string appends nothing for its message,
+// breaks c with a reason, and returns -1 for the entry's number.
+fn cstr(out: u8[>..]&, s: const u8[:]) -> bool {
+    guard !has_nul(s) else { return false; }
     out.append(s);
     out.push(0);
+    return true;
+}
+
+fn has_nul(s: const u8[:]) -> bool {
+    for b in s { if b == 0 { return true; } }
+    return false;
 }
 
 fn put16(out: u8[>..]&, v: i64) {
