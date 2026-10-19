@@ -1,0 +1,13 @@
+connect: no error
+rows: 3, sum 6
+three rows: no error
+lost in a result: 08006 the server closed the connection
+rows before it: 1
+a call after it: 08003 the connection broke: the server closed the connection
+a call after close: 08003 the connection isn't open
+connect again: no error
+a FATAL error: 57P01 terminating connection due to administrator command
+a call after it: 08003 the connection broke: the server ended the connection
+connect again: no error
+a send that fails: 08006 sending to the server failed
+a call after it: 08003 the connection broke: sending to the server failed

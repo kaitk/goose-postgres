@@ -10,7 +10,8 @@
 //   let e, body = pg::step(c, input, out);
 //
 // Authentication (SCRAM-SHA-256 or a cleartext password) is in scram.goose,
-// the decoding of rows in decode.goose, and postgres:// URLs in url.goose.
+// the decoding of rows in decode.goose, postgres:// URLs in url.goose, and the
+// blocking facade over a transport the caller supplies in facade.goose.
 namespace pg;
 
 import std;
@@ -19,6 +20,7 @@ import hash from "github.com/kaitk/goose-hash@v0.0.3";
 import .scram;
 import .decode;
 import .url;
+import .facade;
 
 // What step returns: an event, with the body of the message it came from.
 // Every queued entry ends in exactly one of PARSED, DONE, SUSPENDED, ERROR,

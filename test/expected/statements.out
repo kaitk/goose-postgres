@@ -1,0 +1,12 @@
+SELECT 0: parsed as "gp0"
+SELECT 0: prepared already
+SELECT 1: parsed as "gp1"
+statements kept: 64, parses: 64
+SELECT 64: parsed as ""
+SELECT 64: parsed as ""
+SELECT 63: prepared already
+SELECT 0: prepared already
+SELECT 0: parsed as "gp0"
+SELECT 1 -- xxxxxxxxxxxx: parsed as ""
+SELECT 1 -- xxxxxxxxxxxx: parsed as ""
+SELECT 0: prepared already
