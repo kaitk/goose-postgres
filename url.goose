@@ -1,0 +1,97 @@
+// Connection settings, and reading them from a postgres:// URL.
+namespace pg;
+
+import std;
+
+// Where to connect and as whom. The host and port are for the caller's
+// socket; the rest go into the startup message and authentication.
+struct Config {
+    host: u8[..255],
+    port: i64 = 5432,
+    user: u8[..63],
+    password: u8[..255],
+    database: u8[..63],
+}
+
+// The settings in a URL of the form
+// postgres://user:password@host:port/database (or postgresql://), with each
+// part but the host percent-decoded. The host defaults to localhost, the port
+// to 5432, and the database to the user's name. A query string is ignored.
+// false for a URL that isn't one, or a part longer than Config holds.
+fn parse_url(url: const u8[:]) -> Config, bool {
+    var cfg = Config { .. };
+    var rest = url[..0];
+    if starts_with(url, "postgres://") { rest = url[11..]; }
+    else if starts_with(url, "postgresql://") { rest = url[13..]; }
+    else { return cfg, false; }
+    let q = find(rest, "?");
+    if q >= 0 { rest = rest[..q]; }
+    let slash = find(rest, "/");
+    let authority = if slash >= 0 { rest[..slash] } else { rest };
+    let path = if slash >= 0 { rest[slash + 1..] } else { rest[..0] };
+    let at = rfind(authority, "@");
+    var hostport = authority;
+    if at >= 0 {
+        let info = authority[..at];
+        hostport = authority[at + 1..];
+        let colon = find(info, ":");
+        let user = if colon >= 0 { info[..colon] } else { info };
+        guard decode_into(cfg.user, user, 63) else { return cfg, false; }
+        if colon >= 0 {
+            guard decode_into(cfg.password, info[colon + 1..], 255) else { return cfg, false; }
+        }
+    }
+    guard decode_into(cfg.database, path, 63) else { return cfg, false; }
+    var host = hostport;
+    if hostport.len > 0 && hostport[0] == '[' {
+        let close = find(hostport, "]");
+        guard close > 0 else { return cfg, false; }
+        host = hostport[1..close];
+        let after = hostport[close + 1..];
+        if after.len > 0 {
+            guard after[0] == ':' else { return cfg, false; }
+            let port, ok = parse_int(after[1..]);
+            guard ok && port > 0 && port < 65536 else { return cfg, false; }
+            cfg.port = port;
+        }
+    } else {
+        let colon = rfind(hostport, ":");
+        if colon >= 0 {
+            host = hostport[..colon];
+            let port, ok = parse_int(hostport[colon + 1..]);
+            guard ok && port > 0 && port < 65536 else { return cfg, false; }
+            cfg.port = port;
+        }
+    }
+    guard host.len <= 255 else { return cfg, false; }
+    cfg.host.append(if host.len > 0 { host } else { "localhost" });
+    return cfg, true;
+}
+
+// Percent-decodes s into out, which holds at most cap bytes: false for a
+// malformed escape, or too many bytes.
+fn decode_into<B>(out: B&, s: const u8[:], cap: i64) -> bool {
+    var i = 0;
+    while i < s.len {
+        guard out.len < cap else { return false; }
+        if s[i] == '%' {
+            guard i + 2 < s.len else { return false; }
+            let hi = hex_digit(s[i + 1]);
+            let lo = hex_digit(s[i + 2]);
+            guard hi >= 0 && lo >= 0 else { return false; }
+            out.push((hi * 16 + lo) as! u8);
+            i += 3;
+        } else {
+            out.push(s[i]);
+            i++;
+        }
+    }
+    return true;
+}
+
+fn hex_digit(b: u8) -> i64 {
+    if b >= '0' && b <= '9' { return b - '0'; }
+    if b >= 'a' && b <= 'f' { return b - 'a' + 10; }
+    if b >= 'A' && b <= 'F' { return b - 'A' + 10; }
+    return -1;
+}
