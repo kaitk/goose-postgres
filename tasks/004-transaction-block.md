@@ -88,6 +88,13 @@ first one.
 The trap goose-sqlite recorded applies: a fully typed function that can fail breaks
 `goose check` of a library, so each function that can fail keeps an untyped parameter.
 
+A `return` out of the block, or a `return ... from` an enclosing function, leaves
+`transaction` without running `COMMIT` or `ROLLBACK`, so the connection stays in the
+transaction, as goose-sqlite documents for its block (2026-10-19). Document it the same
+way, and link goose-sqlite's feature request in its `docs/goose-findings.md` (a way for
+a function to run cleanup when a block leaves it early) once that entry lands; pull
+goose-sqlite then and take its wording.
+
 ## Steps
 
 1. Settle the forms and the nesting rule in `docs/decisions.md`, replacing the
@@ -107,4 +114,6 @@ The trap goose-sqlite recorded applies: a fully typed function that can fail bre
       replayed
 - [ ] `pg::fail` outside a transaction doesn't compile, with a fixture
 - [ ] goose-sqlite's task 003 gives the same block, or records where it differs
+- [ ] `docs/architecture.md` says that a `return` out of the block skips `COMMIT`
+      and `ROLLBACK`, linking goose-sqlite's feature request
 - [ ] `scripts/test.sh` and `scripts/live.sh` pass
