@@ -18,7 +18,7 @@ transaction block and a pool on goose-http's loop come next ([tasks](tasks/READM
 
 | | Feature | Notes |
 |---|---|---|
-| 🟢 | Startup and authentication | SCRAM-SHA-256 and cleartext passwords, with settings from a `postgres://` URL. |
+| 🟢 | Startup and authentication | SCRAM-SHA-256, with at most 1,000,000 iterations, and cleartext passwords where `Config.allow_cleartext` allows them, with settings from a `postgres://` URL. |
 | 🟢 | Queries | The extended protocol: parse once, then bind with parameters and execute; results in text or binary. |
 | 🟢 | Pipelining | Many queries queued before any result. Each parse, query, and sync ends in one event carrying its number, including those the server skips after an error. |
 | 🟢 | Decoding | `int2`, `int4`, `int8`, `bool`, `text`, `varchar`, `bpchar`, `name`, `json`, and `jsonb`, in either format. |
@@ -26,7 +26,7 @@ transaction block and a pool on goose-http's loop come next ([tasks](tasks/READM
 | 🟡 | Transactions and queries in parallel | A `pg::transaction` block with savepoints, and several queries in one round trip on the facade (tasks 003 and 004). |
 | 🟢 | goose-http's blocking socket as the facade's transport | The module `pg.socket`: `pg::open` over TCP or a Unix socket, with a time limit on each wait. goose-http at a commit on its `main` until it tags outbound connections. |
 | 🟡 | A pool | On goose-http's outbound connections, sized from `DATABASE_MAX_CONN`, for HttpArena's `/async-db` (task 005). |
-| 🔴 | TLS | Through goose-tls's client mode, for servers that ask for it. |
+| 🔴 | TLS | Through goose-tls's client mode, for servers that ask for it. Until then a URL with `sslmode=require`, `verify-ca`, or `verify-full` is refused. |
 | 🔴 | More types | Floats, `numeric`, dates and times, `uuid`, and arrays; `pg::bytes` gives their raw bytes. |
 
 The protocol is tested against bytes recorded from Postgres 18.0, the version HttpArena
@@ -40,7 +40,7 @@ the connection's state:
 ```goose
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
-import pg from "github.com/kaitk/goose-postgres@v0.0.1";
+import pg from "github.com/kaitk/goose-postgres@v0.0.2";
 
 fn main() {
     let cfg, ok = pg::parse_url("postgres://bench:bench@localhost:5432/benchmark");
@@ -83,7 +83,7 @@ already uses.
 
 ### The blocking facade
 
-On `main`, not yet in a release. A thread that runs no event loop, such as a
+A thread that runs no event loop, such as a
 goose-rest lane, calls the facade, which sends and waits on goose-http's blocking
 socket through the module `pg.socket`. The root file declares goose-http too, at the
 commit `socket.goose` names
@@ -93,7 +93,7 @@ commit `socket.goose` names
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import http from "github.com/kaitk/goose-http@d5bc0fd6a2e5a703d6f9348da7692329f47fadc2";
-import pg from "github.com/kaitk/goose-postgres@<commit>";
+import pg from "github.com/kaitk/goose-postgres@v0.0.2";
 import pg.socket;
 ```
 
@@ -121,6 +121,14 @@ All in namespace `pg`. [Architecture](docs/architecture.md#the-api) has each fun
 contract and the events' table.
 
 - `pg::parse_url(url) -> Config, bool`: the host, port, user, password, and database.
+  `sslmode` `disable`, `allow`, or `prefer` connects without TLS; `require`,
+  `verify-ca`, and `verify-full` are refused, since TLS isn't supported yet. Other
+  query parameters are ignored.
+- `pg::Config`: those fields, and `allow_cleartext`, `false` by default: whether the
+  server may ask for the password in cleartext, which it can read on the way. Set it
+  for a `password` line in `pg_hba.conf`. A request for it after SCRAM began is
+  refused either way. The `Config` keeps the password for as long as the program
+  keeps it; the connection zeroes its own copy once used.
 - `pg::Conn { .. }`: a connection's state, fixed-size, so a pool keeps an array of them.
 - `pg::start(c, out, cfg, nonce)`: the startup message; `nonce` is SCRAM's client
   nonce, such as 18 bytes from goose-hash's `hash::random_bytes`.
