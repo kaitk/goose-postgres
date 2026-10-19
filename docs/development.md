@@ -1,7 +1,8 @@
 # Development
 
 The package is Goose with no C of its own; goose-hash, which it imports for SCRAM, has
-a small C shim that `goose build` compiles. The replayed tests have run on macOS on
+a small C shim that `goose build` compiles, and goose-http, which only the module
+`pg.socket` imports, has its socket calls in C. The replayed tests have run on macOS on
 arm64, and the live tests there against Postgres 18.0 in Docker (2026-10-19). They
 haven't run on Linux or Windows yet.
 
@@ -11,9 +12,9 @@ Use the Goose pin in [README.md](../README.md#pins). The scripts also need:
 
 | Tool | Requirement | Purpose |
 |---|---|---|
-| C compiler | clang or gcc; on Windows, MSVC or `clang-cl` with Visual Studio Build Tools | `goose build` of goose-hash's shim and of each test |
-| git | on `PATH` | `goose build` fetches goose-hash at its tag on first use |
-| Python | 3, with its standard library | `test/run_tests.py` and `scripts/relay.py` |
+| C compiler | clang or gcc; on Windows, MSVC or `clang-cl` with Visual Studio Build Tools | `goose build` of goose-hash's shim, goose-http's C, and each test |
+| git | on `PATH` | `goose build` and `goose check` fetch goose-hash and goose-http at their pins on first use |
+| Python | 3, with its standard library | `test/run_tests.py`, `scripts/relay.py`, and `scripts/unix-forward.py` |
 | POSIX shell, curl, shasum or sha256sum | on `PATH`; Git Bash on Windows | `scripts/goose.sh`, `scripts/test.sh`, and `scripts/live.sh` |
 | Docker | with the `postgres:18` image, which it pulls | `scripts/live.sh` only |
 | CMake | with Make or Ninja | building Goose from source, on Linux arm64 or for `GOOSE_COMMIT` |
@@ -38,12 +39,24 @@ The release's `stdlib/` under `build/` needs no `exclude`: the repository has no
 `.build` sidecar. One added later needs `exclude = ["build"]`, as goose-hash's has,
 because Goose collects a package's symbol table from every `.goose` file under its root.
 
+## The goose-http pin
+
+`socket.goose`, the module `pg.socket`, imports goose-http at commit
+`d5bc0fd6a2e5a703d6f9348da7692329f47fadc2` on its `main` (2026-10-19): its outbound
+connections, the blocking socket the module wraps, aren't in a goose-http release
+yet. A commit pin is the full 40-hex hash, since git can't fetch an abbreviated one.
+`test/live/socket.goose`, the quick start in `README.md`, and `docs/architecture.md`
+declare the same reference. When goose-http tags a release with outbound connections,
+move them all to the tag in one commit, with `scripts/test.sh` and `scripts/live.sh`
+passing.
+
 ## Test
 
 `scripts/test.sh` runs every test that needs no server, and stops at the first step
 that fails:
 
-1. `goose check` of `pg.goose` alone, and of each root file under `test/`.
+1. `goose check` of `pg.goose` alone, of `socket.goose`, which fetches goose-http,
+   of each root file under `test/`, and of each program under `test/live/`.
 2. `test/run_tests.py`: the tests under `test/<area>/`, each built with `goose build`
    at `-O0` and `-O2` and run, its output checked against `test/expected/<name>.out`.
 
@@ -73,7 +86,11 @@ The areas:
   that fails, and the statement cache's limits; and a `pg::Params` list as `Bind`
   writes it, up to 65535 parameters (`params`).
 - `test/compile/`: `// error:` fixtures, programs that must not compile: a facade call
-  outside `pg::run`, and a query inside another's row block.
+  outside `pg::run`, a query inside another's row block, and a program that imports
+  `pg.socket` without declaring goose-http.
+
+`test/run_tests.py` skips `test/live/`, whose programs need a server:
+`scripts/live.sh` runs them ([below](#the-socket-test)).
 
 ### Session tests
 
@@ -109,6 +126,24 @@ facade's tests reach the same relay through `wire::Io`'s transport overloads.
 Record again after changing what a session sends, or to move to a new Postgres version,
 and read the diff of `test/expected/` before committing: the server's nonce, salt, and
 backend key change in every capture, and nothing a test prints may.
+
+### The socket test
+
+`scripts/live.sh` also runs `test/live/socket.goose`, the facade over goose-http's
+socket with no relay: connects that fail (refused, a missing Unix socket, a host name,
+a URL that isn't one), then the session `test/session/facade.goose` replays, through
+the same `wire::facade`, and `pg::open` on a connection again. It runs twice, over
+TCP to the container's port and over a Unix socket, and both runs must print
+`test/expected/socket.out`. `--record` rewrites that file from the TCP run; it has no
+capture.
+
+Docker Desktop can't share a Unix socket between its VM and the host: Postgres fails
+to start with "could not create any Unix-domain sockets" when its socket directory is
+a bind mount (macOS, 2026-10-19). So the Unix run connects to a socket that
+`scripts/unix-forward.py` serves in a directory under `/tmp`, which forwards each
+connection to the container's TCP port. The run tests the client's side, `pg::open`'s
+`unix:` path and goose-http's Unix connect, against a real server, while Postgres
+itself sees TCP.
 
 ## Traps
 

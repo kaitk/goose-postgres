@@ -1,7 +1,7 @@
 # 001: The wire protocol
 
-Status: in-progress. Steps 1 to 4 are done (2026-10-19); step 5 is task 005's, and
-waits on outbound connections, goose-http's task 053.
+Status: in-progress. Steps 1 to 4 are done (2026-10-19); step 5 is task 005's, the
+pool on goose-http's outbound connections (its task 053).
 
 Startup, authentication, and the extended query protocol, enough for HttpArena's
 `/async-db` (goose-rest's task 047): api-4, api-16, gateway-64, gateway-h3, and

@@ -436,7 +436,7 @@ fn next<T>(db: Db<T>&) -> i64, const u8[:] {
             db.at = 0;
         }
         guard receive(db.t, db.input) else {
-            gone(db, "the server closed the connection");
+            gone(db, "receiving from the server failed, or it closed the connection");
             return FAILED, db.input[..0];
         }
     }

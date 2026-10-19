@@ -16,7 +16,8 @@ Two layers go on top of it:
 - **A blocking facade, for lane jobs** ([below](#the-facade)). A goose-rest use case
   that runs several queries runs as one job on a lane and calls `pg::query`,
   `pg::exec`, `pg::run`, and `pg::fail`, as goose-sqlite's API does, so its code
-  reads top to bottom. It sends and waits on a transport the caller supplies. The
+  reads top to bottom. It sends and waits on a transport: goose-http's blocking
+  socket, through the module `pg.socket`, or one the caller supplies. The
   transaction block and queries "in parallel", pipelined on one connection, are
   still to come.
 - **A pool on the worker's loop**, not built yet. A route that runs one query, as
@@ -27,7 +28,9 @@ Two layers go on top of it:
 
 All of it is in namespace `pg`: `pg.goose` holds the connection, the messages the
 client writes, and `step`; `scram.goose` the authentication; `decode.goose` the
-readers of rows; `url.goose` the settings; `facade.goose` the blocking facade.
+readers of rows; `url.goose` the settings; `facade.goose` the blocking facade. The
+module `socket.goose`, which a program imports as `pg.socket`, is the facade over
+goose-http's socket; it is the only part that needs goose-http.
 
 ### Settings
 
@@ -179,10 +182,10 @@ returns. A call that fails leaves through `return ... from pg::run`, so every ca
 that can fail runs inside a `pg::run`, or the program doesn't compile.
 
 ```goose
-var db = pg::Db { t: socket, .. };       // socket: the transport, below
+var db = pg::Db { t: pg::Socket { .. }, .. };   // goose-http's socket, below
 var names: u8[>..] = [];
 let failed = pg::run() {
-    pg::connect(db, cfg);
+    pg::open(db, cfg, 5000);                     // connects, then logs in
     pg::query(db, "SELECT id, name FROM items WHERE price < $1", 50) { r =>
         format(names, pg::int(r, 0), " ", pg::text(r, 1), "\n");
     };
@@ -192,11 +195,43 @@ for e in failed { print(e.code, ": ", e.message); }
 pg::close(db);
 ```
 
+### goose-http's socket
+
+A program on a lane imports the module `pg.socket`, and declares goose-http in its root
+file, at the reference `socket.goose` names: a full commit hash while goose-http's
+outbound connections aren't in a tag ([development](development.md#the-goose-http-pin)).
+
+```goose
+import pg from "github.com/kaitk/goose-postgres@<tag>";
+import http from "github.com/kaitk/goose-http@d5bc0fd6a2e5a703d6f9348da7692329f47fadc2";
+import pg.socket;
+```
+
+A program that imports `pg` without `pg.socket` needs no goose-http, and one that
+imports `pg.socket` without declaring goose-http fails to compile with "pg needs the
+package http".
+
+- `pg::Socket`: goose-http's `http::Socket` and `ms`, the limit in milliseconds on each
+  wait. Build it empty, `pg::Socket { .. }`, in `pg::Db { t: pg::Socket { .. }, .. }`.
+- `pg::open(db, cfg, ms)`, or `pg::open(db, url, ms)`: closes `db` if it is open,
+  connects to the `Config`'s host and port within `ms` (-1: no limit), and runs
+  `pg::connect`. A connect that fails fails with `"08001"` and the reason, such as
+  `can't connect to 127.0.0.1 port 5432: connect ECONNREFUSED`. Call it again to
+  connect again after the connection broke.
+- The host is `localhost` or an IP address; goose-http resolves no other names yet,
+  and fails one with `ENOSYS`. A host that starts with `/` is the directory of the
+  server's Unix socket, `.s.PGSQL.<port>`, as in libpq, such as
+  `/var/run/postgresql`, on Linux and macOS. `pg::parse_url` doesn't decode a host, so
+  set `cfg.host` to the directory.
+- `ms` bounds each send and each receive as well as the connect: a query whose first
+  result takes longer than `ms` fails with `"08006"` and breaks the connection. Pass
+  -1 for a lane that runs long queries.
+
 ### The transport
 
 The facade sends and receives through a value of the caller's, `db.t`, of any
-fixed-size type `T`. It calls three functions on it, which whoever provides `T`
-declares into namespace `pg`:
+fixed-size type `T`, such as `pg::Socket`. It calls three functions on it, which
+whoever provides `T` declares into namespace `pg`:
 
 ```goose
 fn pg::send(t: T&, bytes: const u8[:]) -> bool    // sends all of bytes; false if it can't
@@ -206,12 +241,11 @@ fn pg::receive(t: T&, into: u8[>..]&) -> bool     // waits for at least one byte
 fn pg::close(t: T&)                               // closes it; never fails
 ```
 
-The caller opens the transport to the `Config`'s host and port before
-`pg::connect`, and the transport's own timeouts bound each wait. goose-http's blocking
-socket is the transport for a lane, once goose-http has one (its task 053), through an
-optional module of this package that a program imports with goose-http. The tests
-have two: `test/wire.goose` replays captures and runs live through the relay, and
-`test/fake.goose` fakes a server in the program.
+The caller opens its transport to the `Config`'s host and port before
+`pg::connect`, and the transport's own timeouts bound each wait. `pg.socket` declares
+the three for `pg::Socket`. The tests have two more: `test/wire.goose` replays
+captures and runs live through the relay, and `test/fake.goose` fakes a server in the
+program.
 
 ### Calls
 
@@ -331,7 +365,8 @@ password is cleared from `c` once the server accepts it.
 
 - `pg::transaction`, queries in parallel on the facade, and the pool, as
   [Layers](#layers) says.
-- A transport over goose-http's blocking socket, which goose-http doesn't have yet.
+- Host names other than `localhost` for `pg.socket`, which goose-http doesn't resolve
+  yet, and a Unix socket's directory in a `postgres://` URL.
 - TLS: the package speaks to the server in the clear, so it suits a server on the same
   host or a private network.
 - Binary parameters, and readers for other types: floats, `numeric`, dates and times,

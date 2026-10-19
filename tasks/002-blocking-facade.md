@@ -1,9 +1,9 @@
 # 002: A blocking facade for lane jobs
 
 Status: in-progress. The facade runs over a transport the caller supplies
-(`docs/decisions.md`, 2026-10-19), tested replayed and live through the relay; what's
-left waits on goose-http's blocking socket (its task 053) as the transport, and the
-port goose-rest's best practices make.
+(`docs/decisions.md`, 2026-10-19), tested replayed and live through the relay, and over
+goose-http's blocking socket through the module `pg.socket` (2026-10-19), tested live
+over TCP and a Unix socket. What's left is the port goose-rest's best practices make.
 
 goose-rest runs a use case with several queries as one job on a lane (its task 052):
 the job's code calls the database and gets rows back, top to bottom, as in Hono,
@@ -62,7 +62,7 @@ checks only where a program calls them.
 - [x] `pg::connect` takes SCRAM's nonce from `hash::random_bytes`, with goose-hash
       pinned at v0.0.3
 - [x] A call that can fail, outside `pg::run`, doesn't compile, with a test
-- [ ] goose-http's blocking socket as a transport: three overloads in a module of
-      this package that imports goose-http, once its task 053 has the socket
+- [x] goose-http's blocking socket as a transport: three overloads in a module of
+      this package that imports goose-http (`pg.socket`, with `pg::open`)
 - [ ] goose-rest's best practices can port a multi-query use case on it (its task 052)
 - [x] `scripts/test.sh` and `scripts/live.sh` pass

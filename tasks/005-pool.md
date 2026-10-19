@@ -1,6 +1,7 @@
 # 005: A pool on goose-http's outbound connections
 
-Status: todo. Waits on outbound connections, goose-http's task 053.
+Status: todo. goose-http's outbound connections (its task 053) are on its `main`, not
+yet in a tag; the pool can start at that commit, as `pg.socket` did.
 
 A route that runs one query, as HttpArena's `/async-db` does, sends it on a connection
 the worker's loop owns and resumes when the rows arrive, with no lane between
@@ -18,10 +19,16 @@ and a connection made again on a later request, without crashing.
 ## Design questions
 
 - **Whose connections.** Each worker owns `DATABASE_MAX_CONN / workers` connections on
-  its loop, so a query never crosses threads, or a lane holds the pool and the workers
-  ask it. The first matches the "single queries on the worker's loop" decision; the
-  second shares idle connections between workers. goose-http's task 053 decides which
-  thread owns an outbound connection.
+  its loop, so a query never crosses threads. goose-http's task 053 settled it: the
+  worker whose handler calls `http::wait_socket` owns the socket, and the loop wakes
+  that exchange, so a lane can't hold one pool for every worker. The cost is goose-http's
+  too: an idle connection on one worker can't serve another's request.
+- **Which loop.** The pool drives each connection with `http::connect_start`,
+  `http::wait_socket`, and the non-blocking `http::recv` and `http::send`
+  (`docs/decisions.md`). goose-http watches sockets on `serve_epoll`'s loop only;
+  `serve`'s, io_uring and IOCP, fail `wait_socket` with `ENOSYS`. So `/async-db`
+  runs on `serve_epoll` until goose-http's completion loops watch sockets, and the
+  goose-rest program must choose that loop.
 - **Waiting.** A request whose worker has no idle connection waits in a queue, or
   pipelines onto a busy connection: the protocol allows several queries per
   connection, each with its sync, and one connection's pipeline may serve many
@@ -35,8 +42,7 @@ and a connection made again on a later request, without crashing.
 
 ## Steps
 
-1. Settle the pool's owner and its waiting in `docs/decisions.md`, with goose-http's
-   task 053.
+1. Settle the pool's waiting, and record the per-worker pools, in `docs/decisions.md`.
 2. The pool: connect, authenticate, and prepare HttpArena's statement on each
    connection; hand out and take back; reconnect on failure.
 3. The goose-rest program for `/async-db`, in goose-rest's entry (its task 047).

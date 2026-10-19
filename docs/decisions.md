@@ -206,3 +206,19 @@ users, is [architecture](architecture.md).
   `http::wait_socket` until the socket is readable or writable, then the
   non-blocking `http::recv(s, buf)` and `http::send(s, data)`. goose-http runs that
   half on `serve_epoll` only; `serve`'s loops fail `wait_socket` with `ENOSYS`.
+- **A lane opens its connection with `pg::open`, in module `pg.socket`.** The module
+  `socket.goose` declares `pg::Socket`, `{ s: http::Socket, ms }`, with the three
+  overloads, and `pg::open(db, cfg or url, ms)`, which closes `db` when it is open,
+  connects the socket, and runs `pg::connect`:
+  `var db = pg::Db { t: pg::Socket { .. }, .. }; pg::run() { pg::open(db, cfg, 5000);
+  ... }`. A connect that fails fails `open` through `pg::run`, with
+  `"08001"` and goose-http's call and error, so the program learns why, where a
+  transport that couldn't connect would fail the first send with only "sending to the
+  server failed". The one call also makes a broken connection again. `ms` limits each
+  wait, the connect, every send, and every receive, so a query that runs longer than
+  `ms` before its first byte arrives breaks the connection; `-1` waits without limit.
+  A host that starts with `/` is a directory holding the server's Unix socket,
+  `.s.PGSQL.<port>`, as in libpq, which `open` passes to goose-http as `unix:PATH`.
+  It rejects `pg::socket(cfg, ms) -> Socket`, built in `Db`'s initializer outside
+  `pg::run`, which can't fail with a reason and leaves the reconnect to the program
+  (2026-10-19).

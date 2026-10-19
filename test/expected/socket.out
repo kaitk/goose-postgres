@@ -1,0 +1,49 @@
+refused: 08001 can't connect to 127.0.0.1 port 1: connect ECONNREFUSED
+no Unix socket: 08001 can't connect to unix:/nonexistent/.s.PGSQL.1: connect ENOENT
+a host name: 08001 can't connect to db.invalid port 1: resolve ENOSYS (the host must be localhost or an IP address)
+not a URL: 08001 not a postgres:// URL
+before connecting: 08003 the connection isn't open
+connect: no error
+-- HttpArena's query, twice: prepared once
+3 rows: 46:Prime Gear 46:false 101:Alpha Widget 101:false 132:Nano Gadget 132:true
+3 rows: 107:Flex Module 107:true 210:Hyper Node 210:true 222:Core Relay 222:true
+arena: no error
+-- parameters of each kind
+5 fields: -8999999999 true bytes! true 7 null false
+NULL: true, empty: false
+parameters: no error
+-- commands' counts
+create: 0
+insert: 5
+update: 2
+delete: 1
+select: 4
+commands: no error
+-- a parameter list, past eight
+13 parameters: 55 eleven true true
+insert: 10
+delete: 10
+params: no error
+-- errors, each leaving the connection usable
+division: 22012 division by zero
+syntax: 42601 syntax error at or near "SELEC"
+syntax again, parsed again: 42601 syntax error at or near "SELEC"
+duplicate: 23505 duplicate key value violates unique constraint "t_pkey"
+unique violation: true, class 23
+the program's own: P0001 not enough stock
+a failure in a row block: 23514 three is too many
+rows seen before it: 2
+count: 4
+after it: no error
+-- the transaction status, and savepoints
+in a transaction: false
+after BEGIN: true
+in the savepoint: 23505 duplicate key value violates unique constraint "t_pkey"
+transaction: 25P02 current transaction is aborted, commands ignored until end of transaction block
+after COMMIT: false, ten kept: 1
+rolled back to the savepoint: no error
+after close: 08003 the connection isn't open
+socket closed: true
+items: 10
+open on an open connection: 1
+open again: no error

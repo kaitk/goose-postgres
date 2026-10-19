@@ -7,7 +7,8 @@ as Goose's runner builds a fixture with C of its own, and runs each as a
 process of its own, all in parallel. The first build fetches goose-hash and
 compiles its C, which `goose build` keeps under GOOSE_HOME for the rest. The
 programs under test/session/ replay captures from test/data/ (test/wire.goose);
-scripts/live.sh runs them against a server. A run passes when
+scripts/live.sh runs them against a server, and the programs under test/live/,
+which need one, only there. A run passes when
 its stdout is test/expected/<name>.out, every nonblank line of
 test/expected/<name>.stderr, if there is one, occurs in its stderr, and it
 exits 0, or not 0 where test/expected/<name>.aborts exists.
@@ -203,7 +204,7 @@ class Tests:
 
 def find_tests(names):
     """test/<area>/*.goose, or those of them whose area or name is in `names`."""
-    tests = sorted(p for p in HERE.glob("*/*.goose") if p.parent != EXPECTED)
+    tests = sorted(p for p in HERE.glob("*/*.goose") if p.parent not in (EXPECTED, HERE / "live"))
     stems = {}
     for t in tests:
         if t.stem in stems:

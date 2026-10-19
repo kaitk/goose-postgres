@@ -8,10 +8,9 @@ first user is [goose-rest](https://github.com/kaitk/goose-rest), on goose-http's
 outbound connections ([architecture](docs/architecture.md)).
 
 The protocol works against Postgres 18, and so does a blocking facade for goose-rest's
-lanes, over a transport the program supplies: `pg::query` with a block per row,
-`pg::exec`, and errors through `pg::run`. goose-http has no blocking socket for it yet
-(its task 053), so the tests drive it through a relay. A transaction block and a pool
-on goose-http's loop come next ([tasks](tasks/README.md)).
+lanes, over goose-http's blocking socket or a transport the program supplies:
+`pg::query` with a block per row, `pg::exec`, and errors through `pg::run`. A
+transaction block and a pool on goose-http's loop come next ([tasks](tasks/README.md)).
 
 ## Status
 
@@ -25,7 +24,7 @@ on goose-http's loop come next ([tasks](tasks/README.md)).
 | 🟢 | Decoding | `int2`, `int4`, `int8`, `bool`, `text`, `varchar`, `bpchar`, `name`, `json`, and `jsonb`, in either format. |
 | 🟢 | A blocking facade | For goose-rest's lane jobs: `pg::connect`, `pg::query` with a block per row, `pg::exec`, statements prepared once per connection, and errors through `pg::run` and `pg::fail`, over the program's transport. |
 | 🟡 | Transactions and queries in parallel | A `pg::transaction` block with savepoints, and several queries in one round trip on the facade (tasks 003 and 004). |
-| 🔴 | goose-http's blocking socket as the facade's transport | An optional module of this package, once goose-http has the socket (its task 053). |
+| 🟢 | goose-http's blocking socket as the facade's transport | The module `pg.socket`: `pg::open` over TCP or a Unix socket, with a time limit on each wait. goose-http at a commit on its `main` until it tags outbound connections. |
 | 🟡 | A pool | On goose-http's outbound connections, sized from `DATABASE_MAX_CONN`, for HttpArena's `/async-db` (task 005). |
 | 🔴 | TLS | Through goose-tls's client mode, for servers that ask for it. |
 | 🔴 | More types | Floats, `numeric`, dates and times, `uuid`, and arrays; `pg::bytes` gives their raw bytes. |
@@ -85,15 +84,24 @@ already uses.
 ### The blocking facade
 
 On `main`, not yet in a release. A thread that runs no event loop, such as a
-goose-rest lane, calls the facade, which sends and waits on a transport the program
-supplies: any fixed-size value with `pg::send`, `pg::receive`, and `pg::close`
-overloads ([architecture](docs/architecture.md#the-transport)).
+goose-rest lane, calls the facade, which sends and waits on goose-http's blocking
+socket through the module `pg.socket`. The root file declares goose-http too, at the
+commit `socket.goose` names
+([architecture](docs/architecture.md#goose-https-socket)):
 
 ```goose
-var db = pg::Db { t: socket, .. };
+import std;
+import hash from "github.com/kaitk/goose-hash@v0.0.3";
+import http from "github.com/kaitk/goose-http@d5bc0fd6a2e5a703d6f9348da7692329f47fadc2";
+import pg from "github.com/kaitk/goose-postgres@<commit>";
+import pg.socket;
+```
+
+```goose
+var db = pg::Db { t: pg::Socket { .. }, .. };
 var stock = 0;
 let failed = pg::run() {
-    pg::connect(db, "postgres://bench:bench@localhost:5432/benchmark");
+    pg::open(db, "postgres://bench:bench@localhost:5432/benchmark", 5000);   // ms per wait
     pg::query(db, "SELECT quantity FROM items WHERE id = $1", 7) { r => stock = pg::int(r, 0); };
     if stock == 0 { pg::fail("out of stock"); }
     pg::exec(db, "UPDATE items SET quantity = quantity - 1 WHERE id = $1", 7);
@@ -101,6 +109,11 @@ let failed = pg::run() {
 for e in failed { print(e.code, ": ", e.message); }   // "23505", "P0001", ...
 pg::close(db);
 ```
+
+Without `pg.socket`, a program needs no goose-http, and the facade runs over any
+fixed-size value with `pg::send`, `pg::receive`, and `pg::close` overloads
+([architecture](docs/architecture.md#the-transport)), connected with
+`pg::connect(db, cfg)`.
 
 ## API
 
@@ -127,7 +140,10 @@ contract and the events' table.
 
 The facade ([architecture](docs/architecture.md#the-facade)):
 
-- `pg::Db { t: transport, .. }`: a connection over the program's transport.
+- `pg::Db { t: transport, .. }`: a connection over a transport, such as
+  `pg::Socket { .. }` from `pg.socket`.
+- `pg::open(db, cfg or url, ms)`, in `pg.socket`: connects goose-http's socket, over
+  TCP, or a Unix socket for a host that starts with `/`, then runs `pg::connect`.
 - `pg::connect(db, cfg or url)`: authenticates, with SCRAM's nonce from
   `hash::random_bytes`.
 - `pg::query(db, sql, p1, ..., p8) { r => ... } -> i64`: up to eight parameters (bytes,
@@ -157,7 +173,9 @@ scram.goose    SCRAM-SHA-256
 decode.goose   reading rows, columns, errors, and command tags
 url.goose      Config, and postgres:// URLs
 facade.goose   the blocking facade: Db, connect, query, exec, run, and fail
-test/          unit tests, and session tests that replay captures from Postgres
+socket.goose   the module pg.socket: the facade over goose-http's socket, and open
+test/          unit tests, session tests that replay captures from Postgres, and
+               test/live/, which needs one
 scripts/       the Goose pin, the test scripts, and the live run in Docker with its relay
 docs/          architecture, decisions, development setup, Goose findings
 tasks/         task tracking (tasks/README.md)
@@ -169,6 +187,7 @@ tasks/         task tracking (tasks/README.md)
 |---|---|---|
 | Goose compiler | `aardappel/goose` release `v2026.2` (`3ee3871`), which the scripts fetch ([setup](docs/development.md#set-up-the-goose-compiler)) | An official release builds the same on every platform; a commit is pinned only for a fix not yet released |
 | goose-hash | `github.com/kaitk/goose-hash@v0.0.3`, in each file that imports it | SHA-256, HMAC-SHA-256, and PBKDF2 for SCRAM, and `hash::random_bytes` for its nonce |
+| goose-http | `github.com/kaitk/goose-http@d5bc0fd6a2e5a703d6f9348da7692329f47fadc2`, in `socket.goose` and the programs that import it ([pin](docs/development.md#the-goose-http-pin)) | Its blocking socket, for `pg.socket`; a commit until goose-http tags outbound connections |
 | Postgres | `postgres:18` in `scripts/live.sh`; the captures are from 18.0 | The version HttpArena runs |
 | Test data | HttpArena `2d85137`'s `data/pgdb-seed.sql`, checked by SHA-256 in `scripts/live.sh` | The `/async-db` profile's table |
 

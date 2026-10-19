@@ -48,8 +48,9 @@ for the latest measurements.
 Task 001, the wire protocol, is done but for its last step, which is task 005's. Two
 lines follow it:
 
-- For goose-rest's lane jobs: task 002, the blocking facade, built over a transport
-  the caller supplies and waiting on goose-http's task 053 only for its socket; then
+- For goose-rest's lane jobs: task 002, the blocking facade, over goose-http's
+  blocking socket or a transport the caller supplies, which waits only on goose-rest's
+  port of a use case to it; then
   task 003, queries in parallel on one connection, and task 004, the transaction
   block, which goose-sqlite's task 003 matches. Neither waits on goose-http.
 - For HttpArena: task 005, the pool on goose-http's outbound connections (its task
