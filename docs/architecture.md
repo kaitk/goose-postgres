@@ -35,13 +35,24 @@ goose-http's socket; it is the only part that needs goose-http.
 ### Settings
 
 - `pg::Config`: `host`, `port` (5432), `user`, `password`, and `database`, each a
-  fixed-size field. The host and port are for the caller's socket.
-- `pg::parse_url(url) -> Config, bool`: reads `postgres://user:password@host:port/database`
-  or `postgresql://...`, percent-decoding each part but the host, which may be an
-  IPv6 address in brackets. The host defaults to `localhost`, the port to 5432, and the
-  database to the user's name. A query string, such as `?sslmode=disable`, is ignored.
-  `false` for anything else, or a part longer than the field: 255 bytes for the host and
-  password, 63 for the user and database, Postgres's limit on a name.
+  fixed-size field, and `allow_cleartext` (`false`), whether the server may ask for
+  the password in cleartext ([Authentication](#authentication)). The host and port
+  are for the caller's socket. The connection zeroes its own copy of the password
+  once used; the `Config` still holds it, and clearing that is the caller's.
+- `pg::parse_url(url) -> Config, bool`: reads
+  `postgres://user:password@host:port/database?sslmode=mode` or `postgresql://...`,
+  percent-decoding each part but the host, which may be an IPv6 address in brackets.
+  The host defaults to `localhost`, the port to 5432, and the database to the user's
+  name. `false` for anything else, a part longer than the field (255 bytes for the
+  host and password, 63 for the user and database, Postgres's limit on a name), or a
+  part with a NUL byte, `%00` or raw.
+- `sslmode` may be `disable`, `allow`, or `prefer`, or absent, which all connect
+  without TLS. `require`, `verify-ca`, `verify-full`, and any other value make
+  `parse_url` return `false`, and the facade's `connect` and `open` fail with
+  `"08001"` and a message saying TLS isn't supported yet. The query string's other
+  parameters, such as `application_name` or `connect_timeout`, are ignored.
+  `pg::url_settings(url) -> Config, const u8[:]` gives the reason a URL can't be used,
+  or `""`.
 
 ### A connection
 
@@ -51,7 +62,8 @@ goose-http's socket; it is the only part that needs goose-http.
   text arrives as UTF-8. It keeps the password until authentication uses it. `nonce`
   is SCRAM's client nonce: at least 18 bytes from a secure random source, new for each
   connection, such as goose-hash's `hash::random_bytes`, which `pg::connect` uses;
-  the protocol layer has no source of its own.
+  the protocol layer has no source of its own. A user or database with a NUL byte
+  breaks `c` with a reason and leaves `out` unchanged ([Strings](#strings)).
 - `pg::step(c, input, out) -> i64, const u8[:]`: reads the server's messages from the
   front of `input`, appends any reply authentication needs to `out`, and returns at the
   next event with the body of the message it came from, a slice of `input`. `c.used`
@@ -112,6 +124,15 @@ that pipelines without bound checks `pg::room`. The writers append to `out` and 
 nothing, so any number of queries, each with its sync or several to one, go out in one
 write.
 
+#### Strings
+
+The protocol's strings end at a NUL byte, so a name or SQL holding one would end early
+and let the rest pass as the message's next fields. A writer given one appends nothing
+for its message and breaks `c`, with `c.reason` saying why: `parse` returns -1 for a
+name or SQL with a NUL, and `execute` returns -1, and drops the `Bind` and its
+parameters from `out`, for a `bind` whose statement or portal name has one. Don't send
+`out` after either. Parameters are sent with their length, so they may hold any byte.
+
 ### Events
 
 `step` returns these, and `c.seq` is the number of the entry each belongs to:
@@ -137,11 +158,13 @@ that sync's entries, and `step` reports each one `SKIPPED` before the sync's `RE
 the entries after the sync run. An error the server raises at a sync itself, such as a
 deferred constraint's at the implicit transaction's commit, comes as `ERROR` with the
 sync's number, before its `READY`. NotificationResponse, ParameterStatus, and
-NegotiateProtocolVersion are consumed without an event.
+NegotiateProtocolVersion are consumed without an event, except a ParameterStatus that
+reports `client_encoding` as anything but `UTF8`, as `SET client_encoding` makes the
+server send, which fails the connection: the readers take every text as UTF-8.
 
 `FAILED` means the connection is done: authentication failed or was refused, the
-server sent a FATAL error, or it broke the protocol, as with a message that doesn't fit
-the entry waiting or a length out of range. Every later `step` returns `FAILED` too.
+server sent a FATAL error, it changed `client_encoding`, or it broke the protocol, as
+with a message that doesn't fit the entry waiting or a length out of range. Every later `step` returns `FAILED` too.
 Close the socket.
 
 ### Reading rows
@@ -164,7 +187,10 @@ each field is in its body:
 - `pg::bytes(c, row, i) -> const u8[:]`: a field as the server sent it, for any other
   type.
 
-A NULL reads as 0, false, or empty. `int` gives 0 for text that isn't an integer;
+A NULL reads as 0, false, or empty, and so does a field `i` outside the last `ROW`,
+below 0 or from `pg::field_count(c)` on, which `pg::is_null` reports as NULL; a column
+outside the last `COLUMNS` has type 0 and format `TEXT`. `int` gives 0 for text that
+isn't an integer;
 `columns_are` is the check against reading a column as the wrong type. The slices
 point into the row's body, which is in the caller's input: read them before reusing
 it.
@@ -226,6 +252,9 @@ package http".
 - `ms` bounds each send and each receive as well as the connect: a query whose first
   result takes longer than `ms` fails with `"08006"` and breaks the connection. Pass
   -1 for a lane that runs long queries.
+- Keep one `Db` per connection, and don't copy a `Db` or a `pg::Socket`: a copy keeps
+  the socket's fd number after the original closes, and the OS may give that number
+  to the next connection the process opens.
 
 ### The transport
 
@@ -309,7 +338,10 @@ parameters. A text that fails to parse isn't kept. A `Db` keeps up to `STATEMENT
 (64) statements and `STATEMENT_TEXT` (16 KB) of their SQL; past either, a query
 parses as the unnamed statement each time it runs. A schema change can make a kept
 statement fail with `"0A000"` ("cached plan must not change result type"); connect
-again to drop them.
+again to drop them. `DISCARD ALL` and `DEALLOCATE ALL`, run by the program or by a
+pooler in front of the server, drop them on the server: the next call on one fails
+with `"26000"`, and the facade then forgets them all, so the calls after it prepare
+them again.
 
 ### Errors
 
@@ -321,7 +353,9 @@ again to drop them.
 | `"P0001"` | `pg::RAISE_EXCEPTION` | `pg::fail(message)`: the program's own |
 | `"08006"` | `pg::CONNECTION_FAILURE` | The transport failed, or the server broke the protocol; the message says which |
 | `"08003"` | `pg::CONNECTION_DOES_NOT_EXIST` | A call on a connection that isn't open, or broke earlier |
-| `"08001"` | `pg::SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION` | `pg::connect(db, url)` with a URL that isn't a `postgres://` one |
+| `"08001"` | `pg::SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION` | `pg::connect` or `pg::open` with a URL that isn't a `postgres://` one, one whose `sslmode` needs TLS, settings with a NUL byte, or a socket that can't connect |
+| `"22021"` | `pg::CHARACTER_NOT_IN_REPERTOIRE` | SQL with a NUL byte, refused before it is sent; the connection goes on |
+| `"26000"` | `pg::INVALID_SQL_STATEMENT_NAME` | The server's, for a prepared statement it dropped ([Statements](#statements)) |
 
 Constants name other codes a program tests for, each by its condition's name in
 Postgres's error codes appendix: `pg::UNIQUE_VIOLATION`, `pg::FOREIGN_KEY_VIOLATION`,
@@ -346,19 +380,25 @@ The server chooses, and `step` answers:
   and checks the server's signature with a constant-time compare before it accepts
   AuthenticationOk. A server that skips that step, offers only
   `SCRAM-SHA-256-PLUS`, or sends a nonce that doesn't extend the client's fails the
-  connection. The password is used as given, without SASLprep, which changes nothing
-  for printable ASCII.
-- **A cleartext password**, for a `password` line in `pg_hba.conf`. Without TLS it
-  crosses the network as it is.
+  connection, as does an iteration count above `MAX_ITERATIONS` (1,000,000; Postgres's
+  default is 4096), which would let a hostile server stall the client in PBKDF2. The
+  password is used as given, without SASLprep, which changes nothing for printable
+  ASCII.
+- **A cleartext password**, for a `password` line in `pg_hba.conf`, only when
+  `Config.allow_cleartext` is set. Without TLS it crosses the network as it is, so
+  by default the client refuses the request and fails the connection, as libpq's
+  `require_auth` can. A request after SCRAM began is refused whatever the setting.
 
 MD5, Kerberos, GSSAPI, and SSPI fail the connection with a message saying so. The
-password is cleared from `c` once the server accepts it.
+password's bytes in `c` are zeroed once the server accepts it, or when the connection
+fails; the `Config` the caller passed still holds it.
 
 ## Limits
 
 - `MAX_COLUMNS` (128) columns per row: a RowDescription or DataRow with more fails the
   connection.
 - `MAX_MESSAGE` (1 GB) per message, Postgres's own limit on a field.
+- `MAX_ITERATIONS` (1,000,000) SCRAM iterations.
 - `QUEUE` (1,024) entries waiting at once.
 
 ## Not yet
@@ -368,7 +408,7 @@ password is cleared from `c` once the server accepts it.
 - Host names other than `localhost` for `pg.socket`, which goose-http doesn't resolve
   yet, and a Unix socket's directory in a `postgres://` URL.
 - TLS: the package speaks to the server in the clear, so it suits a server on the same
-  host or a private network.
+  host or a private network. A URL whose `sslmode` asks for TLS is refused.
 - Binary parameters, and readers for other types: floats, `numeric`, dates and times,
   `uuid`, and arrays. `pg::bytes` gives their raw bytes.
 - Closing a prepared statement, cancel requests, COPY, and `LISTEN`.

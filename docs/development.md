@@ -71,20 +71,26 @@ The areas:
 - `test/messages/`: the messages the client writes, byte for byte against the
   protocol's layouts, and the server's that recorded sessions lack: messages cut at
   any point, several in one read, an error at a sync, and each way a connection fails,
-  from MD5 to a wrong SCRAM signature and a server that breaks the protocol.
-- `test/scram/`: RFC 7677's example exchange, and the server-first-messages the client
-  refuses.
-- `test/url/`: `postgres://` URLs.
+  from MD5, a cleartext request not allowed, and an iteration count over the cap, to a
+  wrong SCRAM signature, a client_encoding other than UTF8, and a server that breaks
+  the protocol; strings with a NUL byte, which the writers refuse; and reading a field
+  past a row's last.
+- `test/scram/`: RFC 7677's example exchange, the server-first-messages the client
+  refuses, and a cleartext request after a completed SCRAM, built from `arena`'s
+  capture (`after_scram`).
+- `test/url/`: `postgres://` URLs, with NUL bytes and `sslmode`.
 - `test/session/`: whole sessions with a server, replayed from captures
   ([below](#session-tests)): HttpArena's `/async-db` query in both formats
   (`arena`, and `arena_bytewise`, which hands the server's bytes over one at a time),
   every decoded type and each outcome a pipeline's entry can have (`pipeline`), a
-  cleartext login (`cleartext`), a wrong password (`bad_password`), and the blocking
-  facade's calls, errors, and savepoints (`facade`), and its login (`facade_login`).
+  cleartext login, allowed (`cleartext`) and refused by default
+  (`cleartext_refused`), a wrong password (`bad_password`), and the blocking facade's
+  calls, errors, and savepoints (`facade`), and its login (`facade_login`).
 - `test/facade/`: the facade against a server `test/fake.goose` fakes in the program,
   for what a capture can't show: a connection lost in a result, a FATAL error, a send
-  that fails, and the statement cache's limits; and a `pg::Params` list as `Bind`
-  writes it, up to 65535 parameters (`params`).
+  that fails, the statement cache's limits and statements the server dropped, and
+  what the facade refuses before sending (`refused`); and a `pg::Params` list as
+  `Bind` writes it, up to 65535 parameters (`params`).
 - `test/compile/`: `// error:` fixtures, programs that must not compile: a facade call
   outside `pg::run`, a query inside another's row block, and a program that imports
   `pg.socket` without declaring goose-http.

@@ -95,7 +95,51 @@ users, is [architecture](architecture.md).
   `pg_hba.conf`. MD5, deprecated from Postgres 18, fails with a message, as do
   Kerberos, GSSAPI, SSPI, and `SCRAM-SHA-256-PLUS`, which needs TLS's channel binding.
   The password goes into SCRAM as given, without SASLprep, which changes nothing for
-  printable ASCII (2026-10-19).
+  printable ASCII (2026-10-19). Cleartext is opt-in since 2026-10-19 (below).
+- **A cleartext password only when the settings allow it, and never after SCRAM.**
+  `Config.allow_cleartext`, `false` by default, decides whether the client answers a
+  server's request for the password in cleartext (authentication code 3); without it
+  the connection breaks with a reason, as libpq's `require_auth` refuses a method.
+  Without TLS, any server or anyone on the path could otherwise ask for the password
+  and read it. A request after SCRAM began is refused whatever the setting, since a
+  server that proved, or started proving, it knows the password has no reason to ask
+  for it again: `Conn` records that SCRAM began. The cost: a `password` line in
+  `pg_hba.conf` needs the program to set the field, and a URL can't set it. This
+  amends the decision above, which answered every cleartext request (2026-10-19).
+- **A URL's `sslmode` is read, and TLS modes are refused.** `parse_url` accepts
+  `sslmode` `disable`, `allow`, and `prefer`, and none, all of which connect without
+  TLS, and fails on `require`, `verify-ca`, and `verify-full`, and on other values;
+  the facade's `connect` and `open` then fail with `"08001"` and a message saying TLS
+  isn't supported yet. A program that asked for TLS must not get a connection in the
+  clear without knowing. The query string's other parameters are still ignored
+  (2026-10-19).
+- **SCRAM's iteration count is capped at 1,000,000.** The client's PBKDF2 time grows
+  with the count the server sends, so a hostile server could stall a connection, or a
+  lane, for as long as it likes. Postgres's default is 4096; a count above the cap
+  breaks the connection with a reason. The cost: a server set above 1,000,000
+  iterations can't be reached (2026-10-19).
+- **A NUL byte in a name or SQL is refused before anything is sent.** The protocol's
+  strings end at a NUL, so `x\0options\0-c` as a user would add startup options the
+  program never meant. The protocol layer does no I/O and has no error return in its
+  writers, so a writer given such a string appends nothing for its message and breaks
+  the connection with a reason: `start` for the user or database, `parse` for the
+  name or SQL, which returns -1, and `execute` for a `bind` whose names hold one,
+  which returns -1 and drops the Bind from `out`. The facade checks first, so its
+  connection stays usable: SQL with a NUL fails the call with `"22021"`, Postgres's
+  own code for a NUL in text, and settings with one fail `connect` with `"08001"`.
+  `parse_url` refuses a `%00` or a raw NUL in any part. It rejects aborting, as
+  queuing past `QUEUE` does, since the strings may come from a request, and a bool
+  result on each writer, which changes every caller for a case they rarely meet
+  (2026-10-19).
+- **A statement the server dropped makes the facade forget its statements.** `DISCARD
+  ALL` and `DEALLOCATE ALL`, which a program or a pooler in front of the server may
+  run, drop the statements the facade prepared, and the next call on one fails with
+  `"26000"` (`invalid_sql_statement_name`). On that error the facade forgets them
+  all, so the call after prepares again. The call that found out still fails, rather
+  than retry: inside a transaction the error has already aborted it, and a retry
+  there would fail too. It rejects tracking those commands in the SQL the
+  facade sends, which misses them when another client or a pooler runs them
+  (2026-10-19).
 - **A fixed-size connection state.** `pg::Conn` holds the queue of waiting entries
   (1,024), the current columns (up to 128), and the authentication state inline, so a
   pool keeps its connections in one array of slots. A row with more columns, or more
