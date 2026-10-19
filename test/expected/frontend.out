@@ -1,0 +1,13 @@
+StartupMessage: \00\00\00<\00\03\00\00user\00bench\00database\00benchmark\00client_encoding\00UTF8\00\00
+the client nonce, base64: MDEyMzQ1Njc4OWFiY2RlZmdo
+StartupMessage without a database: \00\00\00)\00\03\00\00user\00bench\00client_encoding\00UTF8\00\00
+room: 1024
+Parse's entry: 0
+Parse: P\00\00\00\12s\00SELECT $1\00\00\00
+the query's entry: 1
+Bind, Describe, and Execute: B\00\00\00$\00s\00\00\00\00\04\00\00\00\02ab\00\00\00\02-7\00\00\00\01t\ff\ff\ff\ff\00\01\00\01D\00\00\00\06P\00E\00\00\00\09\00\00\00\00\00
+a named portal, with a row limit: B\00\00\00\14portal\00\00\00\00\00\00\00\01\00\00D\00\00\00\0cPportal\00E\00\00\00\0fportal\00\00\00\00d
+Sync's entry: 3
+Sync: S\00\00\00\04
+Terminate: X\00\00\00\04
+room after four entries: 1020

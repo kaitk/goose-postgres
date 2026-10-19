@@ -1,0 +1,44 @@
+READY -1 status I
+PARSED 0
+COLUMNS 1: id int4/binary name text/binary category text/binary price int4/binary quantity int4/binary active bool/binary tags jsonb/binary rating_score int4/binary rating_count int4/binary
+the columns are HttpArena's: true
+ROW 1: 7 | Prime Gear 7 | auto | 41 | 876 | false | ["popular"] | 41 | 428
+ROW 1: 19 | Flex Module 19 | garden | 65 | 132 | true | ["limited", "sale"] | 14 | 476
+ROW 1: 46 | Prime Gear 46 | books | 13 | 676 | false | ["new", "limited", "eco", "popular"] | 42 | 261
+ROW 1: 51 | Nano Gadget 51 | office | 64 | 738 | true | ["popular", "new", "wireless"] | 36 | 66
+ROW 1: 58 | Ultra Driver 58 | office | 69 | 821 | true | ["premium", "sale", "popular"] | 11 | 381
+ROW 1: 60 | Alpha Widget 60 | sports | 40 | 731 | true | ["limited", "new"] | 6 | 71
+ROW 1: 61 | Swift Switch 61 | home | 78 | 237 | true | ["heavy-duty", "eco"] | 22 | 278
+DONE 1 "SELECT 7" rows 7
+COLUMNS 2: id int4/text name text/text category text/text price int4/text quantity int4/text active bool/text tags jsonb/text rating_score int4/text rating_count int4/text
+ROW 2: 7 | Prime Gear 7 | auto | 41 | 876 | false | ["popular"] | 41 | 428
+ROW 2: 46 | Prime Gear 46 | books | 13 | 676 | false | ["new", "limited", "eco", "popular"] | 42 | 261
+ROW 2: 60 | Alpha Widget 60 | sports | 40 | 731 | true | ["limited", "new"] | 6 | 71
+ROW 2: 74 | Pro Valve 74 | home | 36 | 519 | true | ["popular"] | 28 | 492
+ROW 2: 93 | Nano Gadget 93 | auto | 31 | 170 | true | ["premium", "eco", "wireless"] | 45 | 207
+DONE 2 "SELECT 5" rows 5
+READY 3 status I
+COLUMNS 4: id int4/binary name text/binary category text/binary price int4/binary quantity int4/binary active bool/binary tags jsonb/binary rating_score int4/binary rating_count int4/binary
+DONE 4 "SELECT 0" rows 0
+COLUMNS 5: id int4/binary name text/binary category text/binary price int4/binary quantity int4/binary active bool/binary tags jsonb/binary rating_score int4/binary rating_count int4/binary
+ROW 5: 7 | Prime Gear 7 | auto | 41 | 876 | false | ["popular"] | 41 | 428
+ROW 5: 10 | Edge Link 10 | home | 118 | 842 | false | ["popular", "limited", "eco"] | 46 | 162
+ROW 5: 11 | Ultra Driver 11 | garden | 109 | 672 | true | ["premium", "fast", "limited", "eco"] | 36 | 276
+ROW 5: 12 | Pro Valve 12 | toys | 135 | 765 | true | ["new", "heavy-duty", "fast", "limited"] | 49 | 25
+ROW 5: 16 | Edge Link 16 | office | 92 | 520 | false | ["sale", "heavy-duty", "fast"] | 11 | 277
+ROW 5: 18 | Nano Gadget 18 | office | 124 | 900 | false | ["premium"] | 35 | 393
+ROW 5: 19 | Flex Module 19 | garden | 65 | 132 | true | ["limited", "sale"] | 14 | 476
+ROW 5: 21 | Ultra Driver 21 | sports | 116 | 66 | true | ["wireless"] | 38 | 113
+ROW 5: 23 | Swift Switch 23 | home | 143 | 686 | true | ["sale", "fast"] | 37 | 243
+ROW 5: 24 | Prime Gear 24 | books | 125 | 804 | true | ["heavy-duty", "eco", "sale", "new"] | 28 | 211
+ROW 5: 27 | Ultra Driver 27 | home | 143 | 474 | false | ["premium"] | 4 | 334
+ROW 5: 29 | Nano Gadget 29 | electronics | 110 | 886 | true | ["fast"] | 25 | 136
+ROW 5: 39 | Swift Switch 39 | clothing | 145 | 620 | false | ["heavy-duty", "limited", "premium"] | 6 | 325
+ROW 5: 41 | Nano Gadget 41 | auto | 135 | 166 | true | ["sale", "compact", "eco", "wireless"] | 35 | 19
+ROW 5: 43 | Ultra Driver 43 | electronics | 128 | 683 | false | ["sale", "popular", "fast"] | 12 | 452
+ROW 5: 48 | Core Relay 48 | garden | 136 | 40 | false | ["new", "wireless", "popular", "limited"] | 25 | 461
+ROW 5: 51 | Nano Gadget 51 | office | 64 | 738 | true | ["popular", "new", "wireless"] | 36 | 66
+ROW 5: 52 | Ultra Driver 52 | toys | 99 | 431 | true | ["wireless", "limited"] | 1 | 156
+DONE 5 "SELECT 18" rows 18
+READY 6 status I
+replayed the whole capture: true

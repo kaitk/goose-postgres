@@ -1,0 +1,7 @@
+READY -1 status I
+PARSED 0
+COLUMNS 1: current_user name/text count int8/text
+ROW 1: plain | 100000
+DONE 1 "SELECT 1" rows 1
+READY 2 status I
+replayed the whole capture: true

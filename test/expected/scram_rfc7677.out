@@ -1,0 +1,16 @@
+client-first-message-bare: n=user,r=rOprNGfwEbeRWgbNEkqO
+no error: 
+client-final-message: c=biws,r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,p=dHzbZapWIk4jUhN+Ute9ytag9zjfMHgsqmmiz7AndVQ=
+the server's signature verifies: ok
+another signature doesn't: ok
+an error doesn't: ok
+bad base64 doesn't: ok
+a nonce that doesn't extend the client's: the server's SCRAM nonce doesn't extend the client's
+a nonce equal to the client's: the server's SCRAM nonce doesn't extend the client's
+a salt that isn't base64: the server's SCRAM salt isn't base64
+no salt: the server's SCRAM salt isn't base64
+no iteration count: the server's SCRAM iteration count is invalid
+an iteration count of 0: the server's SCRAM iteration count is invalid
+SCRAM-SHA-256 offered: ok
+only the PLUS variant offered: ok
+nothing offered: ok

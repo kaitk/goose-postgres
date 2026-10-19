@@ -1,0 +1,53 @@
+READY -1 status I
+-- types, binary then text, on the unnamed statement
+-- parameters: integers, a bool, text, and NULL
+PARSED 0
+COLUMNS 1: i2 int2/binary i2min int2/binary i4min int4/binary i4max int4/binary i8min int8/binary i8max int8/binary t bool/binary f bool/binary txt text/binary vc varchar/binary jb jsonb/binary js json/binary n int4/binary empty text/binary
+ROW 1: 1 | -32768 | -2147483648 | 2147483647 | -9223372036854775808 | 9223372036854775807 | true | false | text, with ünicode | var | {"a": "x", "b": [1, 2]} | {"b": [1, 2], "a": "x"} | NULL | 
+DONE 1 "SELECT 1" rows 1
+COLUMNS 2: i2 int2/text i2min int2/text i4min int4/text i4max int4/text i8min int8/text i8max int8/text t bool/text f bool/text txt text/text vc varchar/text jb jsonb/text js json/text n int4/text empty text/text
+ROW 2: 1 | -32768 | -2147483648 | 2147483647 | -9223372036854775808 | 9223372036854775807 | true | false | text, with ünicode | var | {"a": "x", "b": [1, 2]} | {"b": [1, 2], "a": "x"} | NULL | 
+DONE 2 "SELECT 1" rows 1
+PARSED 3
+COLUMNS 4: sum int8/binary nb bool/binary s text/binary isnull bool/binary
+ROW 4: -8999999998 | true | hi! | true
+DONE 4 "SELECT 1" rows 1
+READY 5 status I
+-- an error, then a query the server skips
+PARSED 6
+ERROR 7 22012 division by zero
+SKIPPED 8
+READY 9 status I
+-- the next sync goes on
+COLUMNS 10: q int4/text
+ROW 10: 5
+DONE 10 "SELECT 1" rows 1
+READY 11 status I
+-- a parse that fails, and a query on it
+ERROR 12 42601 syntax error at or near "SELEC"
+SKIPPED 13
+READY 14 status I
+-- an empty query, a command's count, a row limit, and a notice
+PARSED 15
+DONE 16 "" rows 0
+PARSED 17
+DONE 18 "CREATE TABLE" rows 0
+PARSED 19
+DONE 20 "INSERT 0 3" rows 3
+PARSED 21
+COLUMNS 22: n int4/binary
+ROW 22: 1
+ROW 22: 2
+SUSPENDED 22
+PARSED 23
+NOTICE 00000 hello
+DONE 24 "DO" rows 0
+READY 25 status I
+-- the transaction status
+PARSED 26
+DONE 27 "BEGIN" rows 0
+READY 28 status T
+PARSED 29
+DONE 30 "ROLLBACK" rows 0
+READY 31 status I
+replayed the whole capture: true

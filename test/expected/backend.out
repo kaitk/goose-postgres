@@ -1,0 +1,40 @@
+step before start: FAILED, used 0: step before start
+-- messages cut short
+3 bytes: WANT_INPUT, used 0, need 5
+6 of AuthenticationOk's 9 bytes: WANT_INPUT, used 0, need 9
+a length of 3: FAILED, used 0: a message's length is out of range
+-- authentication the client refuses
+MD5: FAILED, used 13: MD5 password authentication isn't supported
+GSSAPI: FAILED, used 9: authentication request 7 isn't supported
+SASL with only SCRAM-SHA-256-PLUS: FAILED, used 29: the server offers no SASL mechanism but SCRAM-SHA-256-PLUS
+SASL: WANT_INPUT, used 24, need 5, sent 55 bytes
+then AuthenticationOk without SCRAM's final message: FAILED, used 9: the server skipped SCRAM's last message
+SASL: WANT_INPUT, used 24, need 5, sent 55 bytes
+a server nonce that doesn't extend the client's: FAILED, used 32: the server's SCRAM nonce doesn't extend the client's
+SASL: WANT_INPUT, used 24, need 5, sent 55 bytes
+SASLContinue: WANT_INPUT, used 56, need 5, sent 88 bytes
+a wrong server signature: FAILED, used 55: the server's SCRAM signature is wrong
+an ErrorResponse at startup: FAILED, used 59: the server refused the connection [28P01]
+and after it: FAILED, used 0: the server refused the connection
+-- a connection that's open
+the password, sent in cleartext: p\00\00\00\07pw\00
+five messages in one read, then READY: ok
+BackendKeyData kept: ok
+the password dropped once used: ok
+a DataRow with nothing queued: FAILED, used 7: an unexpected message 'D'
+a ReadyForQuery with nothing queued: FAILED, used 6: an unexpected ReadyForQuery
+an unknown message: FAILED, used 5: an unknown message 'q'
+a FATAL error while a query waits: FAILED, used 51: the server ended the connection [57P01]
+a RowDescription of 129 columns: FAILED, used 7: a RowDescription has more than MAX_COLUMNS columns
+a DataRow cut short: FAILED, used 13: a DataRow is cut short
+and after it: FAILED, used 0: a DataRow is cut short
+-- an error at a sync, after its query's results
+event 0: DONE, used 26
+  entry 0
+event 1: NOTICE, used 40
+  entry 1
+event 2: ERROR, used 48 [23503]
+  entry 1
+event 3: READY, used 6
+  entry 1
+all of input consumed: ok

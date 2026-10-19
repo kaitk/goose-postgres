@@ -1,0 +1,14 @@
+postgres://bench:bench@localhost:5432/benchmark -> user "bench" password "bench" host "localhost" port 5432 database "benchmark"
+postgresql://bench@db.example/app?sslmode=disable -> user "bench" password "" host "db.example" port 5432 database "app"
+postgres://localhost -> user "" password "" host "localhost" port 5432 database ""
+postgres:// -> user "" password "" host "localhost" port 5432 database ""
+postgres://us%40er:p%3Ass%2Fw@[::1]:6543/d%20b -> user "us@er" password "p:ss/w" host "::1" port 6543 database "d b"
+postgres://u:p:q@h/db -> user "u" password "p:q" host "h" port 5432 database "db"
+postgres://u@h:0/db -> not a URL
+postgres://u@h:65536/db -> not a URL
+postgres://u@h:x/db -> not a URL
+postgres://u%4@h/db -> not a URL
+postgres://u%zz@h/db -> not a URL
+postgres://u@[::1/db -> not a URL
+mysql://u@h/db -> not a URL
+postgres://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@h/db -> not a URL
