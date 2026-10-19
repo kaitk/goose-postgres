@@ -52,6 +52,29 @@ fn main() {
         print("select: ", pg::exec(db, "SELECT * FROM t"));
     });
 
+    print("-- a parameter list, past eight");
+    errors("params", pg::run() {
+        var p = pg::Params { .. };
+        for k in 1..11 { pg::param(p, k); }
+        pg::param(p, "eleven");
+        pg::param(p, true);
+        pg::param(p, pg::NULL);
+        pg::query(db, """
+            SELECT $1::int + $2::int + $3::int + $4::int + $5::int + $6::int + $7::int
+                   + $8::int + $9::int + $10::int, $11::text, $12::bool, $13::text IS NULL
+            """, p) { r =>
+            print(p.count, " parameters: ", pg::int(r, 0), " ", pg::text(r, 1), " ",
+                  pg::boolean(r, 2), " ", pg::boolean(r, 3));
+        };
+        var rows = pg::Params { .. };
+        for k in 100..110 { pg::param(rows, k); }
+        print("insert: ", pg::exec(db, """
+            INSERT INTO t SELECT n, 'p' || n
+            FROM unnest(ARRAY[$1, $2, $3, $4, $5, $6, $7, $8, $9, $10]::int[]) n
+            """, rows));
+        print("delete: ", pg::exec(db, "DELETE FROM t WHERE n >= $1", 100));
+    });
+
     print("-- errors, each leaving the connection usable");
     errors("division", pg::run() { pg::exec(db, "SELECT 10 / $1::int", 0); });
     errors("syntax", pg::run() { pg::exec(db, "SELEC 1"); });

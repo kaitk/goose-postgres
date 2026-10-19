@@ -1,0 +1,5 @@
+count: 4
+bytes: \00\00\00\02ab\00\00\00\03-12\00\00\00\01f\ff\ff\ff\ff
+parameters in the Bind: 5
+40000 parameters, unsigned: 40000
+the most Postgres takes: 65535

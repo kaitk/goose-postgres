@@ -208,7 +208,8 @@ fn pg::close(t: T&)                               // closes it; never fails
 
 The caller opens the transport to the `Config`'s host and port before
 `pg::connect`, and the transport's own timeouts bound each wait. goose-http's blocking
-socket is the transport for a lane, once goose-http has one (its task 053). The tests
+socket is the transport for a lane, once goose-http has one (its task 053), through an
+optional module of this package that a program imports with goose-http. The tests
 have two: `test/wire.goose` replays captures and runs live through the relay, and
 `test/fake.goose` fakes a server in the program.
 
@@ -239,8 +240,17 @@ have two: `test/wire.goose` replays captures and runs live through the relay, an
 - `pg::fail(message)` and `pg::fail(code, message)`: leave the innermost `run` with
   the program's own error, `pg::RAISE_EXCEPTION` (`"P0001"`) or `code`.
 
-A statement with more than eight parameters goes through the protocol's entries on
-`db.c`.
+For more than eight parameters, or a list built in a loop, a `pg::Params` holds them:
+
+```goose
+var p = pg::Params { .. };
+for id in ids { pg::param(p, id); }       // bytes, an integer, a bool, or pg::NULL
+pg::query(db, sql, p) { r => ... };       // or pg::exec(db, sql, p)
+```
+
+It holds up to 65535, Postgres's limit; adding more aborts. `p.count` is how many it
+holds. Each is kept encoded, as `Bind` sends it, so a call copies the list in one
+append.
 
 ### Rows
 

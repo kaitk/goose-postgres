@@ -15,6 +15,11 @@ update: 2
 delete: 1
 select: 4
 commands: no error
+-- a parameter list, past eight
+13 parameters: 55 eleven true true
+insert: 10
+delete: 10
+params: no error
 -- errors, each leaving the connection usable
 division: 22012 division by zero
 syntax: 42601 syntax error at or near "SELEC"

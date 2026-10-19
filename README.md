@@ -25,7 +25,7 @@ on goose-http's loop come next ([tasks](tasks/README.md)).
 | 🟢 | Decoding | `int2`, `int4`, `int8`, `bool`, `text`, `varchar`, `bpchar`, `name`, `json`, and `jsonb`, in either format. |
 | 🟢 | A blocking facade | For goose-rest's lane jobs: `pg::connect`, `pg::query` with a block per row, `pg::exec`, statements prepared once per connection, and errors through `pg::run` and `pg::fail`, over the program's transport. |
 | 🟡 | Transactions and queries in parallel | A `pg::transaction` block with savepoints, and several queries in one round trip on the facade (tasks 003 and 004). |
-| 🔴 | goose-http's blocking socket as the facade's transport | Once goose-http has one (its task 053). |
+| 🔴 | goose-http's blocking socket as the facade's transport | An optional module of this package, once goose-http has the socket (its task 053). |
 | 🟡 | A pool | On goose-http's outbound connections, sized from `DATABASE_MAX_CONN`, for HttpArena's `/async-db` (task 005). |
 | 🔴 | TLS | Through goose-tls's client mode, for servers that ask for it. |
 | 🔴 | More types | Floats, `numeric`, dates and times, `uuid`, and arrays; `pg::bytes` gives their raw bytes. |
@@ -134,6 +134,8 @@ The facade ([architecture](docs/architecture.md#the-facade)):
   integers, bools, or `pg::NULL`), each row to the block, read with `pg::int(r, i)`,
   `pg::text(r, i)`, and the other readers; returns the count.
 - `pg::exec(db, sql, p1, ..., p8) -> i64`: the count in the command's tag.
+- `pg::Params { .. }` with `pg::param(p, v)`: a list of up to 65535 parameters, for
+  `pg::query(db, sql, p)` and `pg::exec(db, sql, p)`.
 - `pg::run() { ... } -> pg::Error[]`, `pg::fail(message)`, and
   `pg::fail(code, message)`. `pg::Error` holds a SQLSTATE `code` and a `message`.
 - `pg::close(db)` and `pg::in_transaction(db)`.

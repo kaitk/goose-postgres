@@ -70,7 +70,8 @@ The areas:
   facade's calls, errors, and savepoints (`facade`), and its login (`facade_login`).
 - `test/facade/`: the facade against a server `test/fake.goose` fakes in the program,
   for what a capture can't show: a connection lost in a result, a FATAL error, a send
-  that fails, and the statement cache's limits.
+  that fails, and the statement cache's limits; and a `pg::Params` list as `Bind`
+  writes it, up to 65535 parameters (`params`).
 - `test/compile/`: `// error:` fixtures, programs that must not compile: a facade call
   outside `pg::run`, and a query inside another's row block.
 

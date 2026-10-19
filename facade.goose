@@ -162,7 +162,8 @@ fn in_transaction<T>(db: const Db<T>&) -> bool { db.c.status == 'T' || db.c.stat
 // calls F with each row, in the text format. Returns the rows' count. A
 // parameter is bytes, an integer, a bool, or NULL, each sent as text, which
 // the server converts to the type it inferred for its $n. When F fails, the
-// rows still to come are read and dropped by db's next call.
+// rows still to come are read and dropped by db's next call. A Params value
+// in place of p1 gives all of its parameters.
 fn query<F, T>(db: Db<T>&, sql: const u8[:]) -> i64 {
     var out: u8[>..] = [];
     let b = entry(db, out, sql);
@@ -279,6 +280,48 @@ fn exec<T>(db: Db<T>&, sql: const u8[:], p1, p2, p3, p4, p5, p6, p7, p8) -> i64 
 }
 
 fn param(out: u8[>..]&, b: Bind, v: Null) { param_null(out, b); }
+
+// A list of parameters for a statement with more than query's eight, or built
+// in a loop: pg::param(p, v) adds each in order, and pg::query(db, sql, p) or
+// pg::exec(db, sql, p) runs the statement with them. Each is kept as Bind
+// writes it, its length and its text, so a call copies them in one append.
+// Up to 65535, Postgres's limit; adding more aborts.
+struct Params {
+    count: i64 = 0,
+    bytes: u8[>..],
+}
+
+fn param(p: Params&, v: const u8[:]) {
+    room_for_one(p);
+    put32(p.bytes, v.len);
+    p.bytes.append(v);
+}
+
+fn param(p: Params&, v: i64) {
+    room_for_one(p);
+    let at = p.bytes.len;
+    put32(p.bytes, 0);
+    format(p.bytes, v);
+    patch32(p.bytes, at, p.bytes.len - at - 4);
+}
+
+fn param(p: Params&, v: bool) { param(p, if v { "t" } else { "f" }); }
+
+fn param(p: Params&, v: Null) {
+    room_for_one(p);
+    put32(p.bytes, -1);
+}
+
+// Adds p's parameters to b, in order.
+fn param(out: u8[>..]&, b: Bind, p: const Params&) {
+    out.append(p.bytes);
+    count(out, b, p.count);
+}
+
+fn room_for_one(p: Params&) {
+    if p.count == 65535 { abort("pg: more than 65535 parameters"); }
+    p.count++;
+}
 
 // A row's fields, as the protocol's readers give them (decode.goose).
 fn field_count(r: Row) -> i64 { r.c.fields }

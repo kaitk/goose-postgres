@@ -424,8 +424,11 @@ fn begin(out: u8[>..]&, kind: u8) -> i64 {
 
 fn end(out: u8[>..]&, at: i64) { patch32(out, at, out.len - at); }
 
-fn count(out: u8[>..]&, b: Bind) {
-    let n = get16(out, b.count_at) + 1;
+// Adds added to b's parameter count, an unsigned 16-bit field: Postgres takes
+// up to 65535 parameters.
+fn count(out: u8[>..]&, b: Bind, added: i64 = 1) {
+    let n = ((out[b.count_at] as i64) << 8 | out[b.count_at + 1]) + added;
+    if n > 65535 { abort("pg: more than 65535 parameters"); }
     out[b.count_at] = (n >> 8) as! u8;
     out[b.count_at + 1] = n as! u8;
 }
