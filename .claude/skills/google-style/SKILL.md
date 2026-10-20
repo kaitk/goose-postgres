@@ -1,11 +1,11 @@
 ---
 name: google-style
-description: Draft substantial repository documentation or review prose for clarity. Use for new or substantially rewritten README or docs sections and explicit prose reviews. Routine factual corrections, task-status updates, and code edits use AGENTS.md without this skill.
+description: Draft substantial repository documentation or review prose for clarity. Use for new or substantially rewritten README or docs sections and explicit prose reviews. Routine factual corrections, task-status updates, and code edits use agents/writing.md without this skill.
 ---
 
 # Writing review
 
-Apply the writing rules in `AGENTS.md`. This skill adds a focused editing pass for
+Apply the writing rules in `agents/writing.md`. This skill adds a focused editing pass for
 developers who need to understand a decision and act on it. It adapts the
 [Google developer documentation style guide](https://developers.google.com/style).
 

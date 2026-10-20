@@ -1,5 +1,8 @@
 # Agent rules
 
+This file holds what every session needs. `agents/` holds the rules for particular work:
+read the file a task touches before starting it.
+
 ## Project context
 
 - What this is, its API, and its pin: `README.md`
@@ -9,8 +12,6 @@
 - Toolchain, local setup, and tests: `docs/development.md`
 - Goose compiler and stdlib gaps found here: `docs/goose-findings.md`
 - Task tracking: `tasks/` (see `tasks/README.md`)
-- Substantial doc drafts and requested prose reviews:
-  `.claude/skills/google-style/SKILL.md`; other writing follows "Writing" below
 - The protocol: PostgreSQL's "Frontend/Backend Protocol" chapter (protocol 3.0), and
   RFC 5802 and RFC 7677 for SCRAM-SHA-256.
 - Its first user: goose-rest, through goose-http's outbound connections.
@@ -18,6 +19,8 @@
   `docs/stdlib.md`, and `docs/packages.md` (how a package declares the packages it
   needs). Read the tutorial before writing Goose; check the spec before assuming a
   feature exists.
+- Rules for particular work: `agents/goose.md` (writing Goose, and recording what it
+  lacks), and `agents/writing.md` (docs, tasks, and prose reviews)
 
 Follow the recorded decisions; if a change contradicts one, update the doc in the same
 change or ask first. Record setup facts and environment traps you find (paths, shell
@@ -28,38 +31,42 @@ checkouts, or home directory. What only one machine needs, such as where its Goo
 checkout is, goes in `CLAUDE.local.md`, which git ignores. Benchmark results still name
 their machine.
 
-## Writing
+## Keep changes small
 
-- Lead with the decision, behavior, or action, then explain why. Name the responsible
-  component and use concrete facts. Cut filler and repeated summaries.
-- Preserve technical meaning when editing: actors, negations, conditions, numbers,
-  versions, commands, paths, and identifiers. Keep decided/proposed/open,
-  implemented/planned, and must/should/can distinct. Flag contradictions instead of
-  silently resolving them while copyediting.
-- Record a decision with its reason and the trade-off that matters. Keep each fact in
-  one place and link to it elsewhere. Use absolute dates for dated events.
-- Match the document's format. Tasks follow `tasks/README.md`, with concrete acceptance
-  criteria. Use sentence-case headings, backticks for code identifiers and commands,
-  and descriptive links. Wrap prose at about 90 characters.
-- Say what doesn't work yet, plainly.
+Agreed 2026-10-20.
 
-## Goose, not an addition to Goose
+- Meet the requirement's intent with the least machinery. Before building around an
+  obstacle, ask whether the requirement needs it at all.
+- When a fix starts to need a new public API, a change in another repository, or a
+  workaround, stop. Say so in a sentence or two, and propose the simpler reading of the
+  requirement.
+- A feature's cost falls on the programs that use it: no fields in shared structs and no
+  code on shared paths for one feature.
+- When a design makes other code compensate (a fallback, a rescan, a special case
+  elsewhere), change the design rather than add the compensation.
+- Add a setting, a check, or a script option only for a failure that isn't visible
+  already.
+
+## Working beside other agents
+
+Several agents work in these repositories at once (2026-10-20).
+
+- Work in a worktree of your own, on a branch from `origin/main`:
+  `git worktree add ../<repository>-<topic> -b <topic> origin/main`. Remove it once
+  the branch is merged.
+- Leave alone a branch, a commit, or an uncommitted change that isn't yours, in any
+  checkout. Ask if it's in your way.
+- Keep logs, exports, and scratch files in a directory of your own.
+
+## Goose
 
 - Build with the official Goose release that `scripts/goose.sh` pins. Check for a newer
   release at the start of a session and move the pin to it. Pin a commit
   (`GOOSE_COMMIT`) only when a fix this repository needs isn't released yet, and return
   to a release once one has it (2026-10-15).
-- Don't edit a Goose checkout. When the compiler rejects something it should accept,
-  miscompiles, or the stdlib lacks something, reduce it to a minimal program, record it
-  in `docs/goose-findings.md`, and work around it here. Report blockers to the maintainer.
-- Every finding names the Goose commit it was found on, the pin at the time (for a
-  release, its commit).
-- `docs/goose-findings.md` lists bugs first and feature requests after, each part from
-  the least work a fix is expected to take to the most. Place a new entry by that
-  order, and delete an entry once the pin has its fix (2026-10-14).
-- Write Goose the way the pinned release's `samples/` and `stdlib/` do: flat data,
-  references into growing arrays, `return ... from` for errors, untyped parameters for
-  generics.
+- Don't edit a Goose checkout. Work around a compiler or stdlib gap here, record it in
+  `docs/goose-findings.md` as `agents/goose.md` says, and report blockers to the
+  maintainer.
 
 ## Goose, with no C
 
