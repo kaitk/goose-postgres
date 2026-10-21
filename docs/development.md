@@ -21,11 +21,11 @@ Use the Goose pin in [README.md](../README.md#pins). The scripts also need:
 
 ## Set up the Goose compiler
 
-The scripts use the Goose release pinned in `scripts/goose.sh` (`v2026.2`, 2026-10-16)
+The scripts use the Goose release pinned in `scripts/goose.sh` (`v2026.3`, 2026-10-21)
 unless told otherwise. The first script that needs the compiler downloads the release's
 archive for the platform from
 [the releases page](https://github.com/aardappel/goose/releases), checks its SHA-256,
-and unpacks it into `build/goose-v2026.2-<platform>/`; later runs reuse it. Run
+and unpacks it into `build/goose-v2026.3-<platform>/`; later runs reuse it. Run
 `scripts/goose.sh` to fetch it and print the compiler's path. Linux on arm64 has no
 release archive, so there the script builds the release's tag from source, as
 `GOOSE_COMMIT` does below.
