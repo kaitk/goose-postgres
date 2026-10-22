@@ -4,10 +4,10 @@ A PostgreSQL client for [Goose](https://github.com/aardappel/goose), in Goose: t
 frontend/backend protocol (version 3.0) as bytes in and bytes out, so the program's event
 loop owns the sockets and one thread can keep many connections busy. Queries pipeline:
 any number go out in one write, and each result comes back matched to its query. Its
-first user is [goose-rest](https://github.com/kaitk/goose-rest), on goose-http's
+first user is [Plod](https://github.com/kaitk/plod), on goose-http's
 outbound connections ([architecture](docs/architecture.md)).
 
-The protocol works against Postgres 18, and so does a blocking facade for goose-rest's
+The protocol works against Postgres 18, and so does a blocking facade for Plod's
 lanes, over goose-http's blocking socket or a transport the program supplies:
 `pg::query` with a block per row, `pg::exec`, and errors through `pg::run`. A
 transaction block and a pool on goose-http's loop come next ([tasks](tasks/README.md)).
@@ -22,7 +22,7 @@ transaction block and a pool on goose-http's loop come next ([tasks](tasks/READM
 | 🟢 | Queries | The extended protocol: parse once, then bind with parameters and execute; results in text or binary. |
 | 🟢 | Pipelining | Many queries queued before any result. Each parse, query, and sync ends in one event carrying its number, including those the server skips after an error. |
 | 🟢 | Decoding | `int2`, `int4`, `int8`, `bool`, `text`, `varchar`, `bpchar`, `name`, `json`, and `jsonb`, in either format. |
-| 🟢 | A blocking facade | For goose-rest's lane jobs: `pg::connect`, `pg::query` with a block per row, `pg::exec`, statements prepared once per connection, and errors through `pg::run` and `pg::fail`, over the program's transport. |
+| 🟢 | A blocking facade | For Plod's lane jobs: `pg::connect`, `pg::query` with a block per row, `pg::exec`, statements prepared once per connection, and errors through `pg::run` and `pg::fail`, over the program's transport. |
 | 🟡 | Transactions and queries in parallel | A `pg::transaction` block with savepoints, and several queries in one round trip on the facade (tasks 003 and 004). |
 | 🟢 | goose-http's blocking socket as the facade's transport | The module `pg.socket`: `pg::open` over TCP or a Unix socket, with a time limit on each wait. goose-http at a commit on its `main` until it tags outbound connections. |
 | 🟡 | A pool | On goose-http's outbound connections, sized from `DATABASE_MAX_CONN`, for HttpArena's `/async-db` (task 005). |
@@ -84,7 +84,7 @@ already uses.
 ### The blocking facade
 
 A thread that runs no event loop, such as a
-goose-rest lane, calls the facade, which sends and waits on goose-http's blocking
+Plod lane, calls the facade, which sends and waits on goose-http's blocking
 socket through the module `pg.socket`. The root file declares goose-http too, at the
 commit `socket.goose` names
 ([architecture](docs/architecture.md#goose-https-socket)):

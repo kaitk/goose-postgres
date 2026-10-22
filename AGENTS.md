@@ -14,7 +14,7 @@ read the file a task touches before starting it.
 - Task tracking: `tasks/` (see `tasks/README.md`)
 - The protocol: PostgreSQL's "Frontend/Backend Protocol" chapter (protocol 3.0), and
   RFC 5802 and RFC 7677 for SCRAM-SHA-256.
-- Its first user: goose-rest, through goose-http's outbound connections.
+- Its first user: Plod (`github.com/kaitk/plod`), through goose-http's outbound connections.
 - The language: the pinned Goose release's `docs/tutorial.md`, `docs/goose_spec.md`,
   `docs/stdlib.md`, and `docs/packages.md` (how a package declares the packages it
   needs). Read the tutorial before writing Goose; check the spec before assuming a

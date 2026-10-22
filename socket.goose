@@ -1,5 +1,5 @@
 // goose-http's blocking socket as the facade's transport, for a thread that
-// runs no event loop, such as a goose-rest lane. Only a program that imports
+// runs no event loop, such as a Plod lane. Only a program that imports
 // this module needs goose-http, which its root file declares at the
 // reference this file names:
 //

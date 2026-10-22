@@ -13,7 +13,7 @@ a blocking socket, or under a test that replays recorded bytes.
 
 Two layers go on top of it:
 
-- **A blocking facade, for lane jobs** ([below](#the-facade)). A goose-rest use case
+- **A blocking facade, for lane jobs** ([below](#the-facade)). A Plod use case
   that runs several queries runs as one job on a lane and calls `pg::query`,
   `pg::exec`, `pg::run`, and `pg::fail`, as goose-sqlite's API does, so its code
   reads top to bottom. It sends and waits on a transport: goose-http's blocking
@@ -203,7 +203,7 @@ it.
 ## The facade
 
 The facade runs the protocol for a thread that runs no event loop, such as a
-goose-rest lane: each call writes its entries, sends them, waits for the answers, and
+Plod lane: each call writes its entries, sends them, waits for the answers, and
 returns. A call that fails leaves through `return ... from pg::run`, so every call
 that can fail runs inside a `pg::run`, or the program doesn't compile.
 

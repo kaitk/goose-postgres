@@ -1,5 +1,5 @@
 // The blocking facade, for a thread that runs no event loop, such as a
-// goose-rest lane: each call writes its entries, sends them on the
+// Plod lane: each call writes its entries, sends them on the
 // connection's transport, waits for the answers, and returns, so a use case's
 // queries read top to bottom (docs/architecture.md, "The facade").
 //
