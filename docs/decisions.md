@@ -263,7 +263,9 @@ users, is [architecture](architecture.md).
   uses the same socket on the worker's loop, without blocking: `http::connect_start`,
   `http::wait_socket` until the socket is readable or writable, then the
   non-blocking `http::recv(s, buf)` and `http::send(s, data)`. goose-http runs that
-  half on `serve_epoll` only; `serve`'s loops fail `wait_socket` with `ENOSYS`.
+  half on `serve_epoll` only; `serve`'s loops fail `wait_socket` with `ENOSYS`
+  (since 2026-10-22, `serve`'s io_uring loop waits on sockets too: see the pool's
+  loops below).
 - **A lane opens its connection with `pg::open`, in module `pg.socket`.** The module
   `socket.goose` declares `pg::Socket`, `{ s: http::Socket, ms }`, with the three
   overloads, and `pg::open(db, cfg or url, ms)`, which closes `db` when it is open,
@@ -280,3 +282,68 @@ users, is [architecture](architecture.md).
   It rejects `pg::socket(cfg, ms) -> Socket`, built in `Db`'s initializer outside
   `pg::run`, which can't fail with a reason and leaves the reconnect to the program
   (2026-10-19).
+- **A pool per worker, sized by the program, opened as requests need it.** goose-http
+  wakes the exchange that waits on a socket on the worker that armed it, so each
+  worker keeps a `pg::Pool` of its own, built in the worker before it serves:
+  HttpArena's `DATABASE_MAX_CONN` divided by the workers, at least one each. A
+  connection opens when a request finds none idle and the pool isn't at its size, on
+  the loop (`connect_start`, SCRAM, then the query), so a program starts without the
+  server and nothing waits for 256 logins at startup. The cost is goose-http's
+  (2026-10-19): an idle connection on one worker can't serve another's request, and
+  SCRAM's PBKDF2, 4096 iterations at Postgres's default, runs on the worker's
+  thread once per connection (2026-10-23, task 005).
+- **A request with no idle connection waits in a queue, and isn't pipelined onto a
+  busy one.** The pool keeps a ring of the waiting exchanges' mail addresses
+  (`POOL_WAITERS`, 1,024, per worker); a request that ends hands its connection to
+  the first that still waits, by mail from the worker to its own box, and one that
+  no longer waits is skipped. Pipelining would keep a busy connection's next query
+  queued at the server, but a Postgres backend runs one query at a time, so it saves
+  only the gap between one answer's ReadyForQuery and the next query, a mail and a
+  send, against HttpArena's sequential scan of 100,000 rows. It would also cost
+  more: only one exchange can wait on a socket, so the one reading would have to
+  hand each later answer, or the turn to read, to the exchange it belongs to, with a
+  queue of exchanges per connection. It rejects a retry on a short timer too, which
+  wakes requests that still can't run. The cost: a request waits for a whole
+  query's turn, and one mail per hand-over (2026-10-23, task 005).
+- **A connection belongs to the exchange whose address it holds, while that
+  exchange waits.** Each connection records its owner's mail address. A request
+  that finds none idle takes, before it queues, one whose owner no longer waits
+  (`http::mail_live` false), and reads and drops the answers to the queries sent
+  before its own, by their entry numbers, so the connection and its session are
+  kept. So the pool needs no call when an exchange ends without its answer: Plod,
+  for one, gives such a route neither its `TIMEOUT` nor `CLOSED`. A program that
+  does pass them on gives the connection back at once: at `CLOSED`, as it is; at
+  `TIMEOUT`, closed, since a server that didn't answer in time may not answer.
+  It rejects a release the program must call, which a program that misses an event
+  would leak a connection by, for good (2026-10-23, task 005).
+- **The pool reads a query's whole answer before the first row goes to the
+  block.** Each connection has a buffer of `POOL_INPUT` (64 KB), inline in its slot,
+  and the block runs for every row in the call that finds the answer's
+  ReadyForQuery there, so a route writes its rows straight into its response and
+  answers in that call, with no request state per row and no response held open
+  across calls. HttpArena's 50 rows are about 8 KB. An answer longer than the buffer
+  fails the request and closes the connection, and a pooled connection's
+  `max_message` is at most `POOL_INPUT - 1`. Larger results belong on a lane, with
+  the facade, which reads row by row (2026-10-23, task 005).
+- **A pool failure is the route's to answer.** `pg::query` on a pool returns
+  `pg::FAILS`, with the SQLSTATE in the request's `Ticket` and the reason in the
+  pool, when the server can't be reached, refuses or ends the session, breaks the
+  protocol, or answers with an error, and HttpArena's route answers
+  `{"items":[],"count":0}`. A connection that failed is closed, and the next
+  request to take it connects again. Before it sends, a request reads what an idle
+  connection holds, so one the server ended while it was idle, as after a restart,
+  is opened again for that request rather than failing it (2026-10-23, task 005).
+- **Statements are kept per pool and prepared per connection.** The pool keeps
+  each SQL text once, as the facade does, up to `STATEMENTS` (64) and
+  `STATEMENT_TEXT`; a connection marks which it has prepared in a 64-bit mask, and
+  sends `Parse` with the first query that uses one there, in the same write. The
+  mark is set when the Parse is sent, so a query queued behind it binds the name;
+  a Parse that fails clears it. Results come in the text format, as the facade's
+  do: a JSON answer copies integers and `jsonb` as their text (2026-10-23, task
+  005).
+- **The pool runs on `serve_epoll`'s loop and on `serve`'s on io_uring.**
+  goose-http waits on sockets there since 2026-10-22 (its task 053), which amends
+  the decision above that put the pool on `serve_epoll` only. On `serve`'s emulated
+  ring and on IOCP, `wait_socket` fails with `ENOSYS`, and every pooled query fails
+  with that reason. The module is `pg.pool`, beside `pg.socket`, which it imports
+  for the server's address (2026-10-23, task 005).
