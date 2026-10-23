@@ -231,7 +231,7 @@ file, at the tag `socket.goose` names ([development](development.md#the-goose-ht
 
 ```goose
 import pg from "github.com/kaitk/goose-postgres@<tag>";
-import http from "github.com/kaitk/goose-http@v0.5.6";
+import http from "github.com/kaitk/goose-http@v0.5.7";
 import pg.socket;
 ```
 
@@ -383,7 +383,7 @@ request a `pg::Ticket` in its state. The route calls `pg::query` at its request 
 again at each of its later events, and the call does what the event allows:
 
 ```goose
-import http from "github.com/kaitk/goose-http@v0.5.6";
+import http from "github.com/kaitk/goose-http@v0.5.7";
 import pg.pool;
 
 fn handle(ev: http::Event, st: St&, out: http::Reply, db: pg::Pool&) {

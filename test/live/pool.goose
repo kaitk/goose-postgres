@@ -11,7 +11,7 @@
 import std;
 import os;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
-import http from "github.com/kaitk/goose-http@v0.5.6";
+import http from "github.com/kaitk/goose-http@v0.5.7";
 import pg from "../../";
 import pg.socket;
 import pg.pool;

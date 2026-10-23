@@ -4,7 +4,7 @@
 // reference this file names:
 //
 //   import pg from "github.com/kaitk/goose-postgres@<tag>";
-//   import http from "github.com/kaitk/goose-http@v0.5.6";
+//   import http from "github.com/kaitk/goose-http@v0.5.7";
 //   import pg.socket;
 //
 //   var db = pg::Db { t: pg::Socket { .. }, .. };
@@ -19,7 +19,7 @@
 namespace pg;
 
 import std;
-import http from "github.com/kaitk/goose-http@v0.5.6";
+import http from "github.com/kaitk/goose-http@v0.5.7";
 
 // The bytes a receive makes room for at once.
 let RECEIVE_CHUNK = 16384;
