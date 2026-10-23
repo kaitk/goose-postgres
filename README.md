@@ -42,7 +42,7 @@ the connection's state:
 ```goose
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
-import pg from "github.com/kaitk/goose-postgres@v0.0.5";
+import pg from "github.com/kaitk/goose-postgres@v0.0.6";
 
 fn main() {
     let cfg, ok = pg::parse_url("postgres://bench:bench@localhost:5432/benchmark");
@@ -95,7 +95,7 @@ tag `socket.goose` names
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import http from "github.com/kaitk/goose-http@v0.5.8";
-import pg from "github.com/kaitk/goose-postgres@v0.0.5";
+import pg from "github.com/kaitk/goose-postgres@v0.0.6";
 import pg.socket;
 ```
 
