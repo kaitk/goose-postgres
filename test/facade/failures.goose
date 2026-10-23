@@ -1,7 +1,7 @@
 // The ways a facade connection fails, against a faked server: lost in the
-// middle of a result, ended by a FATAL error, a send that fails, and calls
-// after each, which fail without touching the transport until it connects
-// again.
+// middle of a result, ended by a FATAL error, a send that fails, a message
+// longer than Config.max_message, and calls after each, which fail without
+// touching the transport until it connects again.
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
@@ -43,5 +43,24 @@ fn main() {
     db.t.fail_send = true;
     errors("a send that fails", pg::run() { pg::exec(db, "SELECT 1"); });
     errors("a call after it", pg::run() { pg::exec(db, "SELECT 1"); });
+
+    var capped = fake::config();
+    capped.max_message = 1000;
+    for length in [1000, 1001] {
+        db.t = fake::Server { mode: fake::LONG, length: length, .. };
+        print("a cap of 1000, and a row of ", length);
+        errors("the row", pg::run() {
+            pg::connect(db, capped);
+            print("rows: ", pg::query(db, "SELECT n") { r => print("field: ", pg::bytes(r, 0).len, " bytes"); });
+        });
+    }
+    // The server sends only the row's head: a facade that waited for the rest
+    // would fail receiving instead.
+    db.t = fake::Server { mode: fake::LONG, length: pg::DEFAULT_MAX_MESSAGE + 1, .. };
+    errors("a row one byte over the default cap", pg::run() {
+        pg::connect(db, fake::config());
+        pg::exec(db, "SELECT n");
+    });
+    print("input held: ", db.input.len, " bytes");
     pg::close(db);
 }

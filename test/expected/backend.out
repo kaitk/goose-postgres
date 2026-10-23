@@ -3,6 +3,12 @@ step before start: FAILED, used 0: step before start
 3 bytes: WANT_INPUT, used 0, need 5
 6 of AuthenticationOk's 9 bytes: WANT_INPUT, used 0, need 9
 a length of 3: FAILED, used 0: a message's length is out of range
+-- Config.max_message
+the default: 67108864
+the head of a message at the cap: WANT_INPUT, used 0, need 101
+the whole of it: NOTICE, used 101
+the head of one a byte over: FAILED, used 0: a message is longer than Config.max_message
+the head of one a byte over the default: FAILED, used 0: a message is longer than Config.max_message
 -- authentication the client refuses
 MD5: FAILED, used 13: MD5 password authentication isn't supported
 GSSAPI: FAILED, used 9: authentication request 7 isn't supported

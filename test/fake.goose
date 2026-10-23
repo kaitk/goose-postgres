@@ -1,7 +1,7 @@
 // A server faked in the program, as the facade's transport (facade.goose),
 // for what recorded sessions can't show: a connection lost in the middle of
-// a result, a FATAL error, a send that fails, many statements, and statements
-// the server dropped. It reads
+// a result, a FATAL error, a send that fails, a message longer than the cap,
+// many statements, and statements the server dropped. It reads
 // each message the client sends and queues the answers a Postgres server
 // gives, which receive hands over all at once.
 namespace fake;
@@ -15,10 +15,13 @@ import check from "./";
 let ROWS = 0;    // sends `rows` rows of one int4 column, n from 1
 let CUT = 1;     // sends one row, then closes the connection
 let FATAL = 2;   // ends the connection with a FATAL error
+let LONG = 3;    // sends one row whose length field is `length`: the whole
+                 // row up to 60,000 bytes, only its head above
 
 struct Server {
     mode: i64 = ROWS,
     rows: i64 = 0,
+    length: i64 = 0,
     // Whether the next send fails.
     fail_send: bool = false,
     closed: bool = false,
@@ -103,6 +106,16 @@ fn reply(s: Server&, kind: u8, body: const u8[:], answer: u8[>..]&) {
     } else if kind == 'E' {
         if s.mode == FATAL {
             check::message(answer, 'E', "SFATAL\0VFATAL\0C57P01\0Mterminating connection due to administrator command\0\0");
+            return;
+        }
+        if s.mode == LONG {
+            answer.push('D');
+            pg::put32(answer, s.length);
+            guard s.length <= 60000;
+            pg::put16(answer, 1);
+            pg::put32(answer, s.length - 10);
+            for i in s.length - 10 { answer.push('x'); }
+            check::message(answer, 'C', "SELECT 1\0");
             return;
         }
         let n = if s.mode == CUT { 1 } else { s.rows };

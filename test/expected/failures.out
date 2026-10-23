@@ -12,3 +12,11 @@ connect by URL, which allows no cleartext password: 08006 the server asks for a 
 connect again: no error
 a send that fails: 08006 sending to the server failed
 a call after it: 08003 the connection broke: sending to the server failed
+a cap of 1000, and a row of 1000
+field: 990 bytes
+rows: 1
+the row: no error
+a cap of 1000, and a row of 1001
+the row: 08006 a message is longer than Config.max_message
+a row one byte over the default cap: 08006 a message is longer than Config.max_message
+input held: 62 bytes

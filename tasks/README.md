@@ -57,6 +57,7 @@ lines follow it:
   053), which answers `/async-db`.
 
 Two hardening tasks from a security review (2026-10-19) stand beside them: task 006, a
-per-connection cap on a message's size, before the pool, and task 007, socket handles
-that a stale copy can't reach after close, which waits on goose-http.
+per-connection cap on a message's size, before the pool (done 2026-10-23), and task
+007, socket handles that a stale copy can't reach after close, which waits on
+goose-http.
 

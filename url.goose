@@ -7,7 +7,9 @@ import std;
 // socket; the rest go into the startup message and authentication. A server
 // that asks for the password in cleartext is refused unless allow_cleartext
 // is set: without TLS, anyone on the path could read it. The password stays
-// in Config for as long as the caller keeps it.
+// in Config for as long as the caller keeps it. max_message is the longest
+// message the client accepts, by the length the message gives; a longer one
+// breaks the connection before any buffer grows for it.
 struct Config {
     host: u8[..255],
     port: i64 = 5432,
@@ -15,6 +17,7 @@ struct Config {
     password: u8[..255],
     database: u8[..63],
     allow_cleartext: bool = false,
+    max_message: i64 = DEFAULT_MAX_MESSAGE,
 }
 
 // The settings in a URL of the form

@@ -128,7 +128,9 @@ contract and the events' table.
   server may ask for the password in cleartext, which it can read on the way. Set it
   for a `password` line in `pg_hba.conf`. A request for it after SCRAM began is
   refused either way. The `Config` keeps the password for as long as the program
-  keeps it; the connection zeroes its own copy once used.
+  keeps it; the connection zeroes its own copy once used. `max_message`, 64 MB by
+  default, is the longest message the connection accepts: a longer one breaks it
+  before any buffer grows for it. Raise it for larger rows.
 - `pg::Conn { .. }`: a connection's state, fixed-size, so a pool keeps an array of them.
 - `pg::start(c, out, cfg, nonce)`: the startup message; `nonce` is SCRAM's client
   nonce, such as 18 bytes from goose-hash's `hash::random_bytes`.

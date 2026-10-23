@@ -35,9 +35,10 @@ goose-http's socket; it is the only part that needs goose-http.
 ### Settings
 
 - `pg::Config`: `host`, `port` (5432), `user`, `password`, and `database`, each a
-  fixed-size field, and `allow_cleartext` (`false`), whether the server may ask for
-  the password in cleartext ([Authentication](#authentication)). The host and port
-  are for the caller's socket. The connection zeroes its own copy of the password
+  fixed-size field, `allow_cleartext` (`false`), whether the server may ask for
+  the password in cleartext ([Authentication](#authentication)), and `max_message`
+  (`DEFAULT_MAX_MESSAGE`, 64 MB), the longest message the connection accepts
+  ([Limits](#limits)). The host and port are for the caller's socket. The connection zeroes its own copy of the password
   once used; the `Config` still holds it, and clearing that is the caller's.
 - `pg::parse_url(url) -> Config, bool`: reads
   `postgres://user:password@host:port/database?sslmode=mode` or `postgresql://...`,
@@ -164,8 +165,8 @@ server send, which fails the connection: the readers take every text as UTF-8.
 
 `FAILED` means the connection is done: authentication failed or was refused, the
 server sent a FATAL error, it changed `client_encoding`, or it broke the protocol, as
-with a message that doesn't fit the entry waiting or a length out of range. Every later `step` returns `FAILED` too.
-Close the socket.
+with a message that doesn't fit the entry waiting, a length out of range, or one over
+`Config.max_message`. Every later `step` returns `FAILED` too. Close the socket.
 
 ### Reading rows
 
@@ -397,7 +398,13 @@ fails; the `Config` the caller passed still holds it.
 
 - `MAX_COLUMNS` (128) columns per row: a RowDescription or DataRow with more fails the
   connection.
-- `MAX_MESSAGE` (1 GB) per message, Postgres's own limit on a field.
+- `Config.max_message` per message, by the length its head gives: `DEFAULT_MAX_MESSAGE`
+  (64 MB) unless the program sets it, up to `MAX_MESSAGE` (1 GB), Postgres's own limit
+  on a field. `step` checks it as soon as a message's 5-byte head has arrived, and a
+  longer message fails the connection with "a message is longer than
+  Config.max_message", so neither the caller nor the facade grows its input for it.
+  Raise it for a program that reads larger rows, such as big `bytea` or `text`
+  values.
 - `MAX_ITERATIONS` (1,000,000) SCRAM iterations.
 - `QUEUE` (1,024) entries waiting at once.
 

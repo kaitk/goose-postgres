@@ -7,13 +7,23 @@ import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
 import check from "../";
 
-fn started(c: pg::Conn&, cleartext: bool = true) {
+fn started(c: pg::Conn&, cleartext: bool = true, max_message: i64 = pg::DEFAULT_MAX_MESSAGE) {
     var out: u8[>..] = [];
     let parsed, ok = pg::parse_url("postgres://u:pw@localhost/db");
     assert(ok);
     var cfg = parsed;
     cfg.allow_cleartext = cleartext;
+    cfg.max_message = max_message;
     pg::start(c, out, cfg, "0123456789abcdefgh");
+}
+
+// A NoticeResponse whose length field is size.
+fn notice(size: i64) -> u8[>..] {
+    var body: u8[>..] = [];
+    body.append("SNOTICE\0M");
+    while body.len < size - 6 { body.push('x'); }
+    body.append("\0\0");
+    return check::message_of('N', body);
 }
 
 // Steps c once over input, printing the event, what it consumed, and why it
@@ -69,6 +79,19 @@ fn main() {
     check::message(r, 'R', check::auth(0, ""));
     step("6 of AuthenticationOk's 9 bytes", c, r[..6]);
     step("a length of 3", c, "R\0\0\0\x03");
+
+    print("-- Config.max_message");
+    check::eq("the default", pg::Config { .. }.max_message, 64 << 20);
+    started(c, true, 100);
+    let at_cap = notice(100);
+    step("the head of a message at the cap", c, at_cap[..5]);
+    step("the whole of it", c, at_cap);
+    step("the head of one a byte over", c, notice(101)[..5]);
+    var head: u8[>..] = [];
+    head.push('N');
+    pg::put32(head, pg::DEFAULT_MAX_MESSAGE + 1);
+    started(c);
+    step("the head of one a byte over the default", c, head);
 
     print("-- authentication the client refuses");
     started(c);

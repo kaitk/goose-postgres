@@ -118,6 +118,20 @@ users, is [architecture](architecture.md).
   lane, for as long as it likes. Postgres's default is 4096; a count above the cap
   breaks the connection with a reason. The cost: a server set above 1,000,000
   iterations can't be reached (2026-10-19).
+- **A cap on a message's size, per connection: `Config.max_message`, 64 MB by
+  default.** A server, or anyone between it and a client without TLS, could announce
+  a message of nearly 1 GB, Postgres's limit on a field, on every connection, and the
+  facade would hold that much input for each: a pool of 256 connections, or many
+  lanes, could be made to hold far more than the host has. `step` checks the length in
+  a message's head against the cap the connection took from its `Config` at `start`,
+  and breaks the connection with a reason before any caller grows a buffer for the
+  rest. One check in the protocol layer covers the facade, and any caller that grows
+  its input only as `step` reads it. The check sits in `Conn` rather than in the
+  facade's `Db`, so callers of the protocol get it too, and in `Config`, since
+  `start` resets `Conn`. 64 MB is far above any row a web program reads (HttpArena's
+  50 rows are about 8 KB) and a sixteenth of the 1 GB limit; `MAX_MESSAGE` stays the
+  most a program may set. The cost: a program that reads larger rows, such as big
+  `bytea` values, must raise it (2026-10-23, task 006).
 - **A NUL byte in a name or SQL is refused before anything is sent.** The protocol's
   strings end at a NUL, so `x\0options\0-c` as a user would add startup options the
   program never meant. The protocol layer does no I/O and has no error return in its

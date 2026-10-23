@@ -70,8 +70,8 @@ The areas:
 
 - `test/messages/`: the messages the client writes, byte for byte against the
   protocol's layouts, and the server's that recorded sessions lack: messages cut at
-  any point, several in one read, an error at a sync, and each way a connection fails,
-  from MD5, a cleartext request not allowed, and an iteration count over the cap, to a
+  any point, several in one read, an error at a sync, a message at
+  `Config.max_message` and one a byte over, and each way a connection fails, from MD5, a cleartext request not allowed, and an iteration count over the cap, to a
   wrong SCRAM signature, a client_encoding other than UTF8, and a server that breaks
   the protocol; strings with a NUL byte, which the writers refuse; and reading a field
   past a row's last.
@@ -88,7 +88,8 @@ The areas:
   calls, errors, and savepoints (`facade`), and its login (`facade_login`).
 - `test/facade/`: the facade against a server `test/fake.goose` fakes in the program,
   for what a capture can't show: a connection lost in a result, a FATAL error, a send
-  that fails, the statement cache's limits and statements the server dropped, and
+  that fails, a row at `Config.max_message`, one over it, and one over the default
+  of which only the head arrives, the statement cache's limits and statements the server dropped, and
   what the facade refuses before sending (`refused`); and a `pg::Params` list as
   `Bind` writes it, up to 65535 parameters (`params`).
 - `test/compile/`: `// error:` fixtures, programs that must not compile: a facade call

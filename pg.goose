@@ -60,8 +60,11 @@ let SYNC = 3;
 // The most entries that wait at once, and the most columns a row may have.
 let QUEUE = 1024;
 let MAX_COLUMNS = 128;
-// The longest message step accepts: Postgres's own limit on a field is 1 GB.
+// The longest message step accepts, by the length the message gives:
+// Config.max_message, DEFAULT_MAX_MESSAGE unless the program sets it, up to
+// MAX_MESSAGE, Postgres's own limit on a field.
 let MAX_MESSAGE = 1 << 30;
+let DEFAULT_MAX_MESSAGE = 64 << 20;
 
 // A connection: its state, the entries queued and not yet answered, and the
 // columns of the rows arriving. A fixed-size value, so a pool keeps its
@@ -74,6 +77,8 @@ struct Conn {
     need: i64 = 0,
     // The entry the last event belongs to; -1 for startup's READY.
     seq: i64 = -1,
+    // The longest message step accepts, from Config.max_message.
+    max_message: i64 = DEFAULT_MAX_MESSAGE,
     // ReadyForQuery's transaction status: 'I' idle, 'T' in a transaction,
     // 'E' in a failed one.
     status: u8 = 0,
@@ -118,6 +123,7 @@ fn start(c: Conn&, out: u8[>..]&, cfg: Config, nonce: const u8[:]) {
     c = Conn { .. };
     c.state = STARTING;
     c.cleartext = cfg.allow_cleartext;
+    c.max_message = min(cfg.max_message, MAX_MESSAGE);
     c.password.append(cfg.password);
     var n: u8[>..] = [];
     base64::encode(n, nonce[..min(nonce.len, 45)]);
@@ -269,9 +275,9 @@ fn step(c: Conn&, input: const u8[:], out: u8[>..]&) -> i64, const u8[:] {
         }
         let kind = rest[0];
         let size = get32(rest, 1);
-        guard size >= 4 && size <= MAX_MESSAGE else {
-            return broken(c, "a message's length is out of range"), none;
-        }
+        guard size >= 4 else { return broken(c, "a message's length is out of range"), none; }
+        // Checked at the message's head, before the caller grows a buffer for it.
+        guard size <= c.max_message else { return broken(c, "a message is longer than Config.max_message"), none; }
         if rest.len < 1 + size {
             c.need = 1 + size;
             return WANT_INPUT, none;
