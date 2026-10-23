@@ -8,7 +8,7 @@
 // that directory instead of TCP; its output is the same.
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
-import http from "github.com/kaitk/goose-http@d5bc0fd6a2e5a703d6f9348da7692329f47fadc2";
+import http from "github.com/kaitk/goose-http@v0.5.5";
 import pg from "../../";
 import pg.socket;
 import wire from "../";

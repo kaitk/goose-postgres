@@ -4,7 +4,7 @@
 // reference this file names:
 //
 //   import pg from "github.com/kaitk/goose-postgres@<tag>";
-//   import http from "github.com/kaitk/goose-http@d5bc0fd6a2e5a703d6f9348da7692329f47fadc2";
+//   import http from "github.com/kaitk/goose-http@v0.5.5";
 //   import pg.socket;
 //
 //   var db = pg::Db { t: pg::Socket { .. }, .. };
@@ -19,7 +19,7 @@
 namespace pg;
 
 import std;
-import http from "github.com/kaitk/goose-http@d5bc0fd6a2e5a703d6f9348da7692329f47fadc2";
+import http from "github.com/kaitk/goose-http@v0.5.5";
 
 // The bytes a receive makes room for at once.
 let RECEIVE_CHUNK = 16384;
@@ -87,7 +87,6 @@ fn reason(code: i64) -> u8[] {
     if code == http::ECONNREFUSED { r.append("ECONNREFUSED"); }
     else if code == http::ETIMEDOUT { r.append("ETIMEDOUT"); }
     else if code == http::ENOENT { r.append("ENOENT"); }
-    else if code == http::ENOSYS { r.append("ENOSYS (the host must be localhost or an IP address)"); }
     else { format(r, "error ", code); }
     return str(r);
 }

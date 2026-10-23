@@ -225,12 +225,11 @@ pg::close(db);
 ### goose-http's socket
 
 A program on a lane imports the module `pg.socket`, and declares goose-http in its root
-file, at the reference `socket.goose` names: a full commit hash while goose-http's
-outbound connections aren't in a tag ([development](development.md#the-goose-http-pin)).
+file, at the tag `socket.goose` names ([development](development.md#the-goose-http-pin)).
 
 ```goose
 import pg from "github.com/kaitk/goose-postgres@<tag>";
-import http from "github.com/kaitk/goose-http@d5bc0fd6a2e5a703d6f9348da7692329f47fadc2";
+import http from "github.com/kaitk/goose-http@v0.5.5";
 import pg.socket;
 ```
 
@@ -245,8 +244,9 @@ package http".
   `pg::connect`. A connect that fails fails with `"08001"` and the reason, such as
   `can't connect to 127.0.0.1 port 5432: connect ECONNREFUSED`. Call it again to
   connect again after the connection broke.
-- The host is `localhost` or an IP address; goose-http resolves no other names yet,
-  and fails one with `ENOSYS`. A host that starts with `/` is the directory of the
+- The host is a name, which goose-http resolves with the system's resolver, outside
+  `ms`, or an IP address; a name with no address fails with `resolve ENOENT`. A host
+  that starts with `/` is the directory of the
   server's Unix socket, `.s.PGSQL.<port>`, as in libpq, such as
   `/var/run/postgresql`, on Linux and macOS. `pg::parse_url` doesn't decode a host, so
   set `cfg.host` to the directory.
@@ -412,8 +412,7 @@ fails; the `Config` the caller passed still holds it.
 
 - `pg::transaction`, queries in parallel on the facade, and the pool, as
   [Layers](#layers) says.
-- Host names other than `localhost` for `pg.socket`, which goose-http doesn't resolve
-  yet, and a Unix socket's directory in a `postgres://` URL.
+- A Unix socket's directory in a `postgres://` URL.
 - TLS: the package speaks to the server in the clear, so it suits a server on the same
   host or a private network. A URL whose `sslmode` asks for TLS is refused.
 - Binary parameters, and readers for other types: floats, `numeric`, dates and times,

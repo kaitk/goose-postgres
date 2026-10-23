@@ -41,14 +41,14 @@ because Goose collects a package's symbol table from every `.goose` file under i
 
 ## The goose-http pin
 
-`socket.goose`, the module `pg.socket`, imports goose-http at commit
-`d5bc0fd6a2e5a703d6f9348da7692329f47fadc2` on its `main` (2026-10-19): its outbound
-connections, the blocking socket the module wraps, aren't in a goose-http release
-yet. A commit pin is the full 40-hex hash, since git can't fetch an abbreviated one.
-`test/live/socket.goose`, the quick start in `README.md`, and `docs/architecture.md`
-declare the same reference. When goose-http tags a release with outbound connections,
-move them all to the tag in one commit, with `scripts/test.sh` and `scripts/live.sh`
-passing.
+`socket.goose`, the module `pg.socket`, imports goose-http at its release `v0.5.5`
+(2026-10-23), the tag Plod pins, so a Plod program declares one goose-http for both.
+It has the outbound connections: the blocking socket, and `wait_socket` on
+`serve_epoll`'s loop and on `serve`'s io_uring loop (since 2026-10-22, goose-http's
+task 053). `test/live/socket.goose`, the quick start in `README.md`, and
+`docs/architecture.md` declare the same reference. Move them all in one commit, with
+`scripts/test.sh` and `scripts/live.sh` passing. A commit pin, for a fix not yet
+released, is the full 40-hex hash, since git can't fetch an abbreviated one.
 
 ## Test
 
@@ -137,8 +137,8 @@ backend key change in every capture, and nothing a test prints may.
 ### The socket test
 
 `scripts/live.sh` also runs `test/live/socket.goose`, the facade over goose-http's
-socket with no relay: connects that fail (refused, a missing Unix socket, a host name,
-a URL that isn't one), then the session `test/session/facade.goose` replays, through
+socket with no relay: connects that fail (refused, a missing Unix socket, a host name
+under `.invalid`, which no resolver answers, and a URL that isn't one), then the session `test/session/facade.goose` replays, through
 the same `wire::facade`, and `pg::open` on a connection again. It runs twice, over
 TCP to the container's port and over a Unix socket, and both runs must print
 `test/expected/socket.out`. `--record` rewrites that file from the TCP run; it has no

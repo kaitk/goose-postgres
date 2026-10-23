@@ -24,7 +24,7 @@ transaction block and a pool on goose-http's loop come next ([tasks](tasks/READM
 | 🟢 | Decoding | `int2`, `int4`, `int8`, `bool`, `text`, `varchar`, `bpchar`, `name`, `json`, and `jsonb`, in either format. |
 | 🟢 | A blocking facade | For Plod's lane jobs: `pg::connect`, `pg::query` with a block per row, `pg::exec`, statements prepared once per connection, and errors through `pg::run` and `pg::fail`, over the program's transport. |
 | 🟡 | Transactions and queries in parallel | A `pg::transaction` block with savepoints, and several queries in one round trip on the facade (tasks 003 and 004). |
-| 🟢 | goose-http's blocking socket as the facade's transport | The module `pg.socket`: `pg::open` over TCP or a Unix socket, with a time limit on each wait. goose-http at a commit on its `main` until it tags outbound connections. |
+| 🟢 | goose-http's blocking socket as the facade's transport | The module `pg.socket`: `pg::open` over TCP or a Unix socket, with a time limit on each wait. |
 | 🟡 | A pool | On goose-http's outbound connections, sized from `DATABASE_MAX_CONN`, for HttpArena's `/async-db` (task 005). |
 | 🔴 | TLS | Through goose-tls's client mode, for servers that ask for it. Until then a URL with `sslmode=require`, `verify-ca`, or `verify-full` is refused. |
 | 🔴 | More types | Floats, `numeric`, dates and times, `uuid`, and arrays; `pg::bytes` gives their raw bytes. |
@@ -86,13 +86,13 @@ already uses.
 A thread that runs no event loop, such as a
 Plod lane, calls the facade, which sends and waits on goose-http's blocking
 socket through the module `pg.socket`. The root file declares goose-http too, at the
-commit `socket.goose` names
+tag `socket.goose` names
 ([architecture](docs/architecture.md#goose-https-socket)):
 
 ```goose
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
-import http from "github.com/kaitk/goose-http@d5bc0fd6a2e5a703d6f9348da7692329f47fadc2";
+import http from "github.com/kaitk/goose-http@v0.5.5";
 import pg from "github.com/kaitk/goose-postgres@v0.0.2";
 import pg.socket;
 ```
@@ -197,7 +197,7 @@ tasks/         task tracking (tasks/README.md)
 |---|---|---|
 | Goose compiler | `aardappel/goose` release `v2026.3` (`8511ae3`), which the scripts fetch ([setup](docs/development.md#set-up-the-goose-compiler)) | An official release builds the same on every platform; a commit is pinned only for a fix not yet released |
 | goose-hash | `github.com/kaitk/goose-hash@v0.0.4`, in each file that imports it | SHA-256, HMAC-SHA-256, and PBKDF2 for SCRAM, and `hash::random_bytes` for its nonce |
-| goose-http | `github.com/kaitk/goose-http@d5bc0fd6a2e5a703d6f9348da7692329f47fadc2`, in `socket.goose` and the programs that import it ([pin](docs/development.md#the-goose-http-pin)) | Its blocking socket, for `pg.socket`; a commit until goose-http tags outbound connections |
+| goose-http | `github.com/kaitk/goose-http@v0.5.5`, in `socket.goose` and the programs that import it ([pin](docs/development.md#the-goose-http-pin)) | Its outbound connections: the blocking socket for `pg.socket`, and waiting on a socket on the worker's loop, epoll's and io_uring's; Plod's pin |
 | Postgres | `postgres:18` in `scripts/live.sh`; the captures are from 18.0 | The version HttpArena runs |
 | Test data | HttpArena `2d85137`'s `data/pgdb-seed.sql`, checked by SHA-256 in `scripts/live.sh` | The `/async-db` profile's table |
 
