@@ -1,0 +1,35 @@
+-- HttpArena's /async-db
+limit 7: ok
+limit 18: ok
+limit 33: ok
+limit 50: ok
+an empty range: 200 {"items":[],"count":0}
+connections open: 200 1
+-- 8 clients, 10 requests each, on 2 connections
+answered with their limit: 80 of 80
+connections open: 200 2
+-- a query past its time limit, then one on the same pool
+pg_sleep(1) with 200 ms: 200 {"items":[],"count":0} (08006 the database didn't answer in time)
+then a query: 200
+-- an answer longer than POOL_INPUT, then a query
+100 rows of 1000 bytes: 200 {"items":[],"count":0} (08006 the answer is longer than POOL_INPUT)
+then a query: 200, on a new backend: true
+-- clients that go while their query runs
+the next query: 200, on the same backend: true
+the next, the pool not told: 200, on the same backend: true
+-- the server ends every session
+limit 20: ok
+connections open: 200 2
+-- the server refuses new sessions
+a request: 200 {"items":[],"count":0} (55000 database "benchmark" is not currently accepting connections)
+another: 200 {"items":[],"count":0} (55000 database "benchmark" is not currently accepting connections)
+connections open: 200 0
+-- and takes them again
+limit 5: ok
+limit 50: ok
+connections open: 200 1
+-- a server nothing listens for
+a request: 200 {"items":[],"count":0} (08001 can't connect to 127.0.0.1 port 1: connect ECONNREFUSED)
+another: 200 {"items":[],"count":0} (08001 can't connect to 127.0.0.1 port 1: connect ECONNREFUSED)
+-- serve's loop
+serve: true

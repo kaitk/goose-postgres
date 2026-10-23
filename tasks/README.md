@@ -54,7 +54,8 @@ lines follow it:
   task 003, queries in parallel on one connection, and task 004, the transaction
   block, which goose-sqlite's task 003 matches. Neither waits on goose-http.
 - For HttpArena: task 005, the pool on goose-http's outbound connections (its task
-  053), which answers `/async-db`.
+  053), which answers `/async-db`. The pool is built (2026-10-23); Plod's program,
+  HttpArena's validation, and a measurement remain.
 
 Two hardening tasks from a security review (2026-10-19) stand beside them: task 006, a
 per-connection cap on a message's size, before the pool (done 2026-10-23), and task

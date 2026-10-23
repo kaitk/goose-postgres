@@ -1,10 +1,10 @@
 # Development
 
 The package is Goose with no C of its own; goose-hash, which it imports for SCRAM, has
-a small C shim that `goose build` compiles, and goose-http, which only the module
-`pg.socket` imports, has its socket calls in C. The replayed tests have run on macOS on
-arm64, and the live tests there against Postgres 18.0 in Docker (2026-10-19). They
-haven't run on Linux or Windows yet.
+a small C shim that `goose build` compiles, and goose-http, which only the modules
+`pg.socket` and `pg.pool` import, has its socket calls in C. The replayed tests have
+run on macOS on arm64, and the live tests there against Postgres 18.0 in Docker
+(2026-10-19; the pool's on 2026-10-23). They haven't run on Linux or Windows yet.
 
 ## Toolchain
 
@@ -41,12 +41,13 @@ because Goose collects a package's symbol table from every `.goose` file under i
 
 ## The goose-http pin
 
-`socket.goose`, the module `pg.socket`, imports goose-http at its release `v0.5.5`
-(2026-10-23), the tag Plod pins, so a Plod program declares one goose-http for both.
-It has the outbound connections: the blocking socket, and `wait_socket` on
-`serve_epoll`'s loop and on `serve`'s io_uring loop (since 2026-10-22, goose-http's
-task 053). `test/live/socket.goose`, the quick start in `README.md`, and
-`docs/architecture.md` declare the same reference. Move them all in one commit, with
+`socket.goose` and `pool.goose`, the modules `pg.socket` and `pg.pool`, import
+goose-http at its release `v0.5.5` (2026-10-23), the tag Plod pins, so a Plod program
+declares one goose-http for both. It has the outbound connections: the blocking
+socket, and `wait_socket` on `serve_epoll`'s loop and on `serve`'s io_uring loop
+(since 2026-10-22, goose-http's task 053). `test/live/socket.goose`,
+`test/live/pool.goose`, the quick start in `README.md`, and `docs/architecture.md`
+declare the same reference. Move them all in one commit, with
 `scripts/test.sh` and `scripts/live.sh` passing. A commit pin, for a fix not yet
 released, is the full 40-hex hash, since git can't fetch an abbreviated one.
 
@@ -138,8 +139,9 @@ backend key change in every capture, and nothing a test prints may.
 
 `scripts/live.sh` also runs `test/live/socket.goose`, the facade over goose-http's
 socket with no relay: connects that fail (refused, a missing Unix socket, a host name
-under `.invalid`, which no resolver answers, and a URL that isn't one), then the session `test/session/facade.goose` replays, through
-the same `wire::facade`, and `pg::open` on a connection again. It runs twice, over
+under `.invalid`, which no resolver answers, and a URL that isn't one), then the
+session `test/session/facade.goose` replays, through the same `wire::facade`, and
+`pg::open` on a connection again. It runs twice, over
 TCP to the container's port and over a Unix socket, and both runs must print
 `test/expected/socket.out`. `--record` rewrites that file from the TCP run; it has no
 capture.
@@ -151,6 +153,23 @@ a bind mount (macOS, 2026-10-19). So the Unix run connects to a socket that
 connection to the container's TCP port. The run tests the client's side, `pg::open`'s
 `unix:` path and goose-http's Unix connect, against a real server, while Postgres
 itself sees TCP.
+
+### The pool test
+
+`scripts/live.sh` runs `test/live/pool.goose` last, since it ends the server's
+sessions and refuses new ones for a while. The program serves on goose-http's
+`serve_epoll` loop, one worker, with pools of two connections, of one, and of one to a
+port nothing listens on, and requests from its own threads: HttpArena's `/async-db` at
+the limits 7, 18, 33, and 50 and an empty range; 80 requests from 8 threads at once on
+the two connections; `pg_sleep(1)` past a 200 ms limit; an answer longer than
+`POOL_INPUT`; clients that go while their query runs, with the pool told at `CLOSED`
+and not, each followed by a query that must find the same backend; a server that ends
+every session (`pg_terminate_backend`), refuses new ones (`ALTER DATABASE benchmark
+ALLOW_CONNECTIONS false`), and takes them again, through an admin connection on
+`pg.socket` to the database `postgres`; and connects refused. It ends with one request
+on `serve`'s loop, which gets rows on io_uring and the empty answer with
+`wait_socket`'s reason elsewhere, such as macOS. It must print
+`test/expected/pool.out`, which `--record` rewrites.
 
 ## Traps
 
@@ -166,3 +185,16 @@ itself sees TCP.
 - `for e in pg::run() { ... } { ... }` doesn't parse as a loop over the errors: the
   second block is taken as the loop's body and the first as `run`'s missing argument.
   Bind the errors first, `let failed = pg::run() { ... };`.
+- goose-http's `Config.address` holds 112 bytes, so a loop listening on a Unix socket
+  in a long `TMPDIR`, such as macOS's `/var/folders/...` or an agent's scratch
+  directory, aborts with "limited array capacity exceeded". `scripts/live.sh` runs
+  the pool test with `TMPDIR` set to its short directory under `/tmp`.
+- A block's parameters are taken by value, and a growable array isn't copied
+  implicitly, so a block can't take the output buffer itself: the pool's parameter
+  writer gets a `Binding`, a struct holding a reference to it.
+- A function in `socket.goose` that names a type of `pg.goose` in its signature,
+  such as `Config`, fails `goose check socket.goose`, which `scripts/test.sh` runs on
+  the file alone; an untyped parameter is checked only where it's called.
+- Docker Desktop's port forwarding passes on a backend's last bytes, and its close,
+  a little after `pg_stat_activity` shows the backend gone (macOS, 2026-10-23): the
+  pool test waits 200 ms after the server ends its sessions.

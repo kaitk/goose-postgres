@@ -53,24 +53,35 @@ fn pg::close(t: pg::Socket&) { http::hangup(t.s); }
 // fails with SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION.
 fn open(db: Db<Socket>&, cfg: Config, ms) {
     close(db);
-    let unix = cfg.host.len > 0 && cfg.host[0] == '/';
+    let where = socket_address(cfg);
+    let s, e = http::connect(where, cfg.port, ms);
+    guard e.code == 0 else { fail(SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION, cant_connect(where, cfg.port, e)); }
+    db.t = Socket { s: s, ms: ms };
+    connect(db, cfg);
+}
+
+// The address goose-http connects to for cfg: its host, or unix: and the
+// server's socket in the directory a host that starts with / names. cfg is
+// a Config; untyped, so that `goose check` of this file alone, which doesn't
+// see pg.goose, takes it.
+fn socket_address(cfg) -> u8[>..] {
     var where: u8[>..] = [];
-    if unix {
+    if cfg.host.len > 0 && cfg.host[0] == '/' {
         format(where, "unix:", cfg.host, if cfg.host[cfg.host.len - 1] == '/' { "" } else { "/" },
                ".s.PGSQL.", cfg.port);
     } else {
         where.append(cfg.host);
     }
-    let s, e = http::connect(where, cfg.port, ms);
-    guard e.code == 0 else {
-        var message: u8[>..] = [];
-        format(message, "can't connect to ", where);
-        if !unix { format(message, " port ", cfg.port); }
-        format(message, ": ", e.call, " ", reason(e.code));
-        fail(SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION, message);
-    }
-    db.t = Socket { s: s, ms: ms };
-    connect(db, cfg);
+    return where;
+}
+
+// Why a connect to where and port failed, for an Error's message.
+fn cant_connect(where: const u8[:], port: i64, e: http::Error) -> u8[] {
+    var message: u8[>..] = [];
+    format(message, "can't connect to ", where);
+    if !starts_with(where, "unix:") { format(message, " port ", port); }
+    format(message, ": ", e.call, " ", reason(e.code));
+    return str(message);
 }
 
 // Connects db with the settings in a postgres:// URL (parse_url), as open
