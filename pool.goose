@@ -253,12 +253,13 @@ fn pooled<R, W>(p: Pool&, t: Ticket&, out: http::Reply, kind: u8, data: const u8
     if t.state == TICKET_QUEUED {
         guard kind == http::WAKE else { return WAITS; }
         let k = handed(data);
-        if k >= 0 && k < p.slots.len && p.slots[k].owner.key == t.addr.key {
-            t.state = TICKET_HAVE;
-            t.conn = k;
-        } else {
-            t.state = TICKET_NEW;
+        // Other mail leaves t in the queue, where it is.
+        guard k >= 0 && k < p.slots.len && p.slots[k].owner.key == t.addr.key else {
+            http::later(out, ms);
+            return WAITS;
         }
+        t.state = TICKET_HAVE;
+        t.conn = k;
     }
     if t.state == TICKET_NEW {
         guard !has_nul(sql) else { return fails(p, t, CHARACTER_NOT_IN_REPERTOIRE, "the SQL holds a NUL byte"); }
@@ -296,6 +297,12 @@ fn acquire(p: Pool&, t: Ticket&, out: http::Reply, ms: i64) -> i64 {
             // Leaves it with a waiter, or with no owner if none still waits.
             release(p, abandoned);
             continue;
+        }
+        // An idle connection while requests wait is one a full box kept from
+        // the first of them: it goes to the queue, unless the box is still full.
+        if idle >= 0 && p.waiting > 0 {
+            release(p, idle);
+            if p.slots[idle].owner.key != 0 { continue; }
         }
         let k = if idle >= 0 { idle } else if unowned >= 0 { unowned } else { abandoned };
         guard k < 0 else {
