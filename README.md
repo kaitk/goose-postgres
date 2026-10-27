@@ -215,3 +215,10 @@ tasks/         task tracking (tasks/README.md)
 | Test data | HttpArena `2d85137`'s `data/pgdb-seed.sql`, checked by SHA-256 in `scripts/live.sh` | The `/async-db` profile's table |
 
 Move a pin in its own commit, with the tests that still pass.
+
+## License
+
+Licensed under either of the [Apache License, Version 2.0](LICENSE-APACHE) or the
+[MIT license](LICENSE-MIT), at your option. Unless you state otherwise, any
+contribution you submit for inclusion, as defined in the Apache-2.0 license, is
+licensed the same way, without any additional terms or conditions.
