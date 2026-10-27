@@ -25,8 +25,10 @@ read the file a task touches before starting it.
 Follow the recorded decisions; if a change contradicts one, update the doc in the same
 change or ask first. Record setup facts and environment traps you find (paths, shell
 quirks, Postgres versions, Docker setup) in `docs/development.md`, not
-in agent memory, so the next agent finds them. Docs and commits name no people: date a
-decision or a request (`(2026-10-19)`), and describe the setup without anyone's machine,
+in agent memory, so the next agent finds them. Docs and commits don't credit a
+decision or a request to a person, as in "Kait asked": date it (`(2026-10-19)`). A
+name goes only where one belongs, such as a copyright line or another project's
+author. Describe the setup without anyone's machine,
 checkouts, or home directory. What only one machine needs, such as where its Goose
 checkout is, goes in `CLAUDE.local.md`, which git ignores. Benchmark results still name
 their machine.
