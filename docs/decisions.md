@@ -340,7 +340,11 @@ users, is [architecture](architecture.md).
   mark is set when the Parse is sent, so a query queued behind it binds the name;
   a Parse that fails clears it. Results come in the text format, as the facade's
   do: a JSON answer copies integers and `jsonb` as their text (2026-10-23, task
-  005).
+  005). A Parse that fails with `"42P05"` (`duplicate_prepared_statement`) leaves
+  the mark set, since the connection has the statement. A request that goes before
+  its Parse fails leaves that mark set, and the next query on it fails with
+  `"26000"`, which clears them all; each statement the connection still has then
+  fails once with `"42P05"`, not on every run (2026-10-30, task 008).
 - **The pool runs on `serve_epoll`'s loop and on `serve`'s on io_uring.**
   goose-http waits on sockets there since 2026-10-22 (its task 053), which amends
   the decision above that put the pool on `serve_epoll` only. On `serve`'s emulated

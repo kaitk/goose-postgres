@@ -17,6 +17,11 @@ then a query: 200, on a new backend: true
 -- clients that go while their query runs
 the next query: 200, on the same backend: true
 the next, the pool not told: 200, on the same backend: true
+-- a client that goes while its Parse waits, which then fails
+the next query: 200
+the statement that failed to parse: 200 {"items":[],"count":0} (26000 prepared statement "gp4" does not exist)
+one the server has, parsed again: 200 {"items":[],"count":0} (42P05 prepared statement "gp1" already exists)
+and run again: 200
 -- the server ends every session
 limit 20: ok
 connections open: 200 2

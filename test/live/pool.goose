@@ -1,7 +1,8 @@
 // The pool (pool.goose) on goose-http's loop, against a server that
 // scripts/live.sh starts: HttpArena's /async-db at its limits, many requests
 // on two connections, a query past its time limit, clients that go while
-// their query runs, with the pool told and not told, a server that ends its
+// their query runs, with the pool told and not told, one that goes while its
+// Parse waits and then fails, a server that ends its
 // connections, refuses new ones, and takes them again, and a server nothing
 // listens for. The routes run on serve_epoll's loop; on serve's, each
 // answers as wait_socket allows there: on io_uring as on epoll, elsewhere
@@ -26,6 +27,7 @@ let SLOW: u8 = 3;
 let SLEEP: u8 = 4;
 let UNHEARD: u8 = 5;
 let BIG: u8 = 6;
+let GONE: u8 = 7;
 
 struct St {
     t: pg::Ticket = pg::Ticket { .. },
@@ -59,6 +61,7 @@ fn handle(ev: http::Event, st: St&, out: http::Reply, db: pg::Pool&, one: pg::Po
         else if path == "/sleep" { st.route = SLEEP; }
         else if path == "/sleep-unheard" { st.route = UNHEARD; }
         else if path == "/big" { st.route = BIG; }
+        else if path == "/gone" { st.route = GONE; }
         else {
             http::respond(out, 404, "text/plain", "");
             return;
@@ -71,6 +74,7 @@ fn handle(ev: http::Event, st: St&, out: http::Reply, db: pg::Pool&, one: pg::Po
     else if st.route == PID { scalar(ev, st, out, one, "SELECT pg_backend_pid()", 5000); }
     else if st.route == SLOW { scalar(ev, st, out, one, "SELECT pg_sleep(1)", 200); }
     else if st.route == BIG { scalar(ev, st, out, one, "SELECT repeat('x', 1000) FROM generate_series(1, 100)", 5000); }
+    else if st.route == GONE { scalar(ev, st, out, one, "SELECT v FROM parse_gone", 5000); }
     else { scalar(ev, st, out, one, "SELECT pg_sleep(0.3)", 5000); }
 }
 
@@ -269,6 +273,12 @@ fn show(label: const u8[:], address: const u8[:], path: const u8[:]) -> u8[>..] 
     return body;
 }
 
+// As show, without the body, such as a backend's pid, which changes.
+fn show_status(label: const u8[:], address: const u8[:], path: const u8[:]) {
+    let status, why, body = get(address, path);
+    print(label, ": ", status, if why.len > 0 { " (" } else { "" }, why, if why.len > 0 { ")" } else { "" });
+}
+
 struct Address { a: u8[..200] }
 struct Done { ok: i64 }
 
@@ -353,6 +363,29 @@ fn main() {
     get_and_go(epoll, "/sleep-unheard");
     let s3, w3, unheard = get(epoll, "/pid");
     print("the next, the pool not told: ", s3, w3, ", on the same backend: ", unheard == again);
+
+    print("-- a client that goes while its Parse waits, which then fails");
+    var lock = pg::Db { t: pg::Socket { .. }, .. };
+    let opened_lock = pg::run() { pg::open(lock, dbcfg, 5000); };
+    for e in opened_lock { abort(str("lock: ", e.code, " ", e.message)); }
+    admin(lock, "CREATE TABLE parse_gone (v int)");
+    admin(lock, "BEGIN");
+    admin(lock, "DROP TABLE parse_gone");
+    get_and_go(epoll, "/gone");
+    // pg_locks, unlike pg_stat_activity, isn't held still for a transaction.
+    var waits = false;
+    for i in 200 {
+        waits = admin(lock, "SELECT count(*) FROM pg_locks WHERE NOT granted") == "1";
+        if waits { break; }
+        sleep_ms(25);
+    }
+    guard waits else { abort("the Parse didn't wait for the lock"); }
+    admin(lock, "COMMIT");
+    pg::close(lock);
+    show_status("the next query", epoll, "/pid");
+    show("the statement that failed to parse", epoll, "/gone");
+    show("one the server has, parsed again", epoll, "/pid");
+    show_status("and run again", epoll, "/pid");
 
     var acfg = dbcfg;
     acfg.database.clear();

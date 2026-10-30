@@ -503,7 +503,11 @@ fn answer<R>(p: Pool&, t: Ticket&, out: http::Reply, ms: i64, open: bool) -> i64
         } else if e == DONE {
             count = rows(body);
         } else if e == ERROR {
-            if s.c.seq == t.parse && t.statement >= 0 { s.prepared &= ~bit(t.statement); }
+            // 42P05 says the connection has the statement, which the mask may
+            // have lost to a 26000 after a gone request's Parse failed.
+            if s.c.seq == t.parse && t.statement >= 0 && field(body, 'C') != "42P05" {
+                s.prepared &= ~bit(t.statement);
+            }
             if !failed {
                 failed = true;
                 code.append(field(body, 'C')[..min(field(body, 'C').len, 5)]);

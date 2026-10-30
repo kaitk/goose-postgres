@@ -163,7 +163,9 @@ port nothing listens on, and requests from its own threads: HttpArena's `/async-
 the limits 7, 18, 33, and 50 and an empty range; 80 requests from 8 threads at once on
 the two connections; `pg_sleep(1)` past a 200 ms limit; an answer longer than
 `POOL_INPUT`; clients that go while their query runs, with the pool told at `CLOSED`
-and not, each followed by a query that must find the same backend; a server that ends
+and not, each followed by a query that must find the same backend; a client that goes
+while its query's Parse waits for a lock that a `DROP TABLE` holds, then fails, and
+the queries after it on that connection; a server that ends
 every session (`pg_terminate_backend`), refuses new ones (`ALTER DATABASE benchmark
 ALLOW_CONNECTIONS false`), and takes them again, through an admin connection on
 `pg.socket` to the database `postgres`; and connects refused. It ends with one request
