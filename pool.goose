@@ -6,7 +6,7 @@
 // until one is handed back. A program imports the module pg.pool, and
 // declares goose-http in its root file at the reference this file names.
 //
-//   import http from "github.com/kaitk/goose-http@v0.5.10";
+//   import http from "github.com/kaitk/goose-http@v0.5.15";
 //   import pg.pool;
 //
 //   var db = pg::pool(cfg, per_worker);        // in the worker, before serve
@@ -25,7 +25,7 @@ namespace pg;
 
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
-import http from "github.com/kaitk/goose-http@v0.5.10";
+import http from "github.com/kaitk/goose-http@v0.5.15";
 import .socket;
 
 // Each connection's buffer: the most one query's answer may take, and so
