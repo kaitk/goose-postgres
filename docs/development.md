@@ -42,7 +42,7 @@ because Goose collects a package's symbol table from every `.goose` file under i
 ## The goose-http pin
 
 `socket.goose` and `pool.goose`, the modules `pg.socket` and `pg.pool`, import
-goose-http at its release `v0.5.15` (2026-10-30), the tag Plod pins, so a Plod program
+goose-http at its release `v0.5.16` (2026-10-30), the tag Plod pins, so a Plod program
 declares one goose-http for both. It has the outbound connections: the blocking
 socket, and `wait_socket` on `serve_epoll`'s loop and on `serve`'s io_uring loop
 (since 2026-10-22, goose-http's task 053). `test/live/socket.goose`,
