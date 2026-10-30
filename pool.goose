@@ -452,6 +452,8 @@ fn send_query<W>(p: Pool&, t: Ticket&, out: http::Reply, ms: i64, sql: const u8[
     W(Binding { out: o, b: b });
     let q = execute(s.c, o, b);
     let y = sync(s.c, o);
+    // A message longer than MAX_MESSAGE broke the connection: none is sent.
+    guard s.c.state != BROKEN else { return down(p, t, CONNECTION_FAILURE, s.c.reason); }
     if t.first < 0 { t.first = if q >= 0 { q } else { y }; }
     // More than 65535 parameters: the Bind is dropped, and the query fails
     // with this code once the server has answered the rest.

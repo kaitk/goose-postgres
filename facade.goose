@@ -321,6 +321,7 @@ fn param(p: Params&, v: Null) {
 
 // Adds p's parameters to b, in order.
 fn param(out: u8[>..]&, b: Bind, p: const Params&) {
+    guard fits(out, b, p.bytes.len) else { return; }
     out.append(p.bytes);
     count(out, b, p.count);
 }
@@ -412,6 +413,8 @@ fn finish<F, T>(db: Db<T>&, out: u8[>..]&, b: Bind) -> i64 {
     // fails once the server has answered a Parse before it.
     let q = execute(db.c, out, b);
     sync(db.c, out);
+    // A message longer than MAX_MESSAGE broke the connection: none is sent.
+    guard db.c.state != BROKEN else { lost(db, out[..0]); }
     transmit(db, out);
     var count = 0;
     var failed = false;

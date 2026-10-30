@@ -74,8 +74,10 @@ The areas:
   any point, several in one read, an error at a sync, a message at
   `Config.max_message` and one a byte over, and each way a connection fails, from MD5, a cleartext request not allowed, and an iteration count over the cap, to a
   wrong SCRAM signature, a client_encoding other than UTF8, and a server that breaks
-  the protocol; strings with a NUL byte, which the writers refuse; and reading a field
-  past a row's last.
+  the protocol; strings with a NUL byte, which the writers refuse, and a message a
+  byte longer than `MAX_MESSAGE`, which they refuse too; and reading a field past a
+  row's last. That message's parameter, and the one `refused` tries to send, take
+  1 GB of memory in each run, at `-O0` and at `-O2`.
 - `test/scram/`: RFC 7677's example exchange, the server-first-messages the client
   refuses, and a cleartext request after a completed SCRAM, built from `arena`'s
   capture (`after_scram`).
@@ -91,8 +93,8 @@ The areas:
   for what a capture can't show: a connection lost in a result, a FATAL error, a send
   that fails, a row at `Config.max_message`, one over it, and one over the default
   of which only the head arrives, the statement cache's limits and statements the server dropped, and
-  what the facade refuses before sending, more than 65535 parameters among it
-  (`refused`); and a `pg::Params` list as `Bind` writes it, up to 65535 parameters,
+  what the facade refuses before sending, more than 65535 parameters and a message
+  longer than `MAX_MESSAGE` among it (`refused`); and a `pg::Params` list as `Bind` writes it, up to 65535 parameters,
   and the `Bind` that `execute` refuses past them (`params`).
 - `test/compile/`: `// error:` fixtures, programs that must not compile: a facade call
   outside `pg::run`, a query inside another's row block, and a program that imports

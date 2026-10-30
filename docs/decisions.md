@@ -145,6 +145,16 @@ users, is [architecture](architecture.md).
   queuing past `QUEUE` does, since the strings may come from a request, and a bool
   result on each writer, which changes every caller for a case they rarely meet
   (2026-10-19).
+- **A message longer than `MAX_MESSAGE` is refused before it is written.** The
+  protocol's length fields are 32 bits, so a parameter or SQL of 4 GB or more would
+  wrap its message's length, and the server would read the rest of it as messages of
+  its own. `parse` checks the length before it writes, `param` before it copies a
+  parameter, marking the `Bind` in its length field as `count` does, and `execute`
+  checks the whole `Bind`, names included; each refuses as for a NUL, appending
+  nothing and breaking the connection, as Postgres ends a session on a message over
+  its limit. The facade and the pool send nothing once the connection broke, and
+  fail with `"08006"`. It rejects a check in `put32`, which has no error return, and
+  aborting, since a parameter may come from a request (2026-10-30, task 008).
 - **A statement the server dropped makes the facade forget its statements.** `DISCARD
   ALL` and `DEALLOCATE ALL`, which a program or a pooler in front of the server may
   run, drop the statements the facade prepared, and the next call on one fails with

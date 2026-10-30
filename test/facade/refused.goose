@@ -1,6 +1,7 @@
 // What the facade refuses before sending, against a faked server: settings
 // whose names hold a NUL, SQL with a NUL, and more than 65535 parameters,
-// which leave the connection usable.
+// which leave the connection usable, and a message longer than MAX_MESSAGE,
+// which breaks it.
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
@@ -38,5 +39,13 @@ fn main() {
         print("rows: ", pg::query(db, "SELECT n WHERE n > $1", 0) { r => });
     });
     check::that("bound, not parsed again", db.t.parses == before + 1);
+
+    var big: u8[>..] = [];
+    big.resize(pg::MAX_MESSAGE, 'x');
+    errors("a parameter that takes the Bind past MAX_MESSAGE", pg::run() {
+        pg::exec(db, "SELECT n WHERE n < $1", big);
+    });
+    check::that("nothing sent, its Parse neither", db.t.parses == before + 1 && db.t.pending.len == 0);
+    errors("a query after it", pg::run() { pg::exec(db, "SELECT n"); });
     pg::close(db);
 }

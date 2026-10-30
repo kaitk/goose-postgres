@@ -76,4 +76,21 @@ fn main() {
     check::eq("Bind of a name with a NUL, at execute", pg::execute(c, out, bad), -1);
     check::bytes("  out", out, "kept");
     print("  ", c.reason, ", ready: ", pg::ready(c));
+
+    print("-- a message a byte longer than MAX_MESSAGE, refused before it is written");
+    var big: u8[>..] = [];
+    big.resize(pg::MAX_MESSAGE, 'x');
+    c = pg::Conn { .. };
+    c.state = pg::OPEN;
+    check::eq("Parse", pg::parse(c, out, "s", big[..pg::MAX_MESSAGE - 8]), -1);
+    check::bytes("  out", out, "kept");
+    print("  ", c.reason, ", ready: ", pg::ready(c));
+    c = pg::Conn { .. };
+    c.state = pg::OPEN;
+    let long = pg::bind(out, "s");
+    pg::param(out, long, big[..pg::MAX_MESSAGE - 18]);
+    check::eq("  out's length, the parameter not copied", out.len, 4 + 12);
+    check::eq("Bind of one parameter, at execute", pg::execute(c, out, long), -1);
+    check::bytes("  out", out, "kept");
+    print("  ", c.reason, ", ready: ", pg::ready(c));
 }

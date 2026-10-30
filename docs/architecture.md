@@ -138,6 +138,11 @@ name or SQL with a NUL, and `execute` returns -1, and drops the `Bind` and its
 parameters from `out`, for a `bind` whose statement or portal name has one. Don't send
 `out` after either. Parameters are sent with their length, so they may hold any byte.
 
+A message's length is a 32-bit field, so one longer than `MAX_MESSAGE` (1 GB),
+Postgres's limit, is refused the same way, before its length could wrap: `parse`
+before it writes, and `execute` for a `Bind` that its names or parameters take past
+it, whose parameters `param` stops copying once they would.
+
 ### Events
 
 `step` returns these, and `c.seq` is the number of the entry each belongs to:
@@ -356,7 +361,7 @@ them again.
 |---|---|---|
 | the server's | | The server's error for the statement, such as `"23505"` for a duplicate key, or the one it ended the connection with, such as `"28P01"` for a wrong password |
 | `"P0001"` | `pg::RAISE_EXCEPTION` | `pg::fail(message)`: the program's own |
-| `"08006"` | `pg::CONNECTION_FAILURE` | The transport failed, or the server broke the protocol; the message says which |
+| `"08006"` | `pg::CONNECTION_FAILURE` | The transport failed, the server broke the protocol, or a message longer than `MAX_MESSAGE` was refused before it was sent; the message says which |
 | `"08003"` | `pg::CONNECTION_DOES_NOT_EXIST` | A call on a connection that isn't open, or broke earlier |
 | `"08001"` | `pg::SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION` | `pg::connect` or `pg::open` with a URL that isn't a `postgres://` one, one whose `sslmode` needs TLS, settings with a NUL byte, or a socket that can't connect |
 | `"22021"` | `pg::CHARACTER_NOT_IN_REPERTOIRE` | SQL with a NUL byte, refused before it is sent; the connection goes on |
@@ -481,6 +486,9 @@ fails; the `Config` the caller passed still holds it.
   Config.max_message", so neither the caller nor the facade grows its input for it.
   Raise it for a program that reads larger rows, such as big `bytea` or `text`
   values.
+- `MAX_MESSAGE` per message the client writes: a longer one fails the connection
+  with "a message is longer than MAX_MESSAGE" before any of it is sent
+  ([Strings](#strings)).
 - `MAX_ITERATIONS` (1,000,000) SCRAM iterations.
 - `QUEUE` (1,024) entries waiting at once.
 - `POOL_INPUT` (64 KB) per pooled query's answer, and so `POOL_INPUT - 1` per message

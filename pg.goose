@@ -62,7 +62,8 @@ let QUEUE = 1024;
 let MAX_COLUMNS = 128;
 // The longest message step accepts, by the length the message gives:
 // Config.max_message, DEFAULT_MAX_MESSAGE unless the program sets it, up to
-// MAX_MESSAGE, Postgres's own limit on a field.
+// MAX_MESSAGE, Postgres's own limit on a field, and the longest the writers
+// write.
 let MAX_MESSAGE = 1 << 30;
 let DEFAULT_MAX_MESSAGE = 64 << 20;
 
@@ -157,8 +158,13 @@ fn room(c: const Conn&) -> i64 { QUEUE - c.count }
 
 // Queues a Parse of sql as the statement name, "" for the unnamed one, and
 // returns its number. The server infers the parameters' types. A name or
-// SQL with a NUL breaks c, and returns -1 with out unchanged.
+// SQL with a NUL, or a message longer than MAX_MESSAGE, breaks c, and returns
+// -1 with out unchanged.
 fn parse(c: Conn&, out: u8[>..]&, name: const u8[:], sql: const u8[:]) -> i64 {
+    guard name.len + sql.len + 8 <= MAX_MESSAGE else {
+        broken(c, "a message is longer than MAX_MESSAGE");
+        return -1;
+    }
     let at = begin(out, 'P');
     guard cstr(out, name) && cstr(out, sql) else {
         out.resize(at - 1);
@@ -192,14 +198,16 @@ fn bind(out: u8[>..]&, statement: const u8[:], portal: const u8[:] = "") -> Bind
 
 // Adds a parameter to b, in the text format: bytes as they are, an integer
 // in decimal, a bool as t or f. Postgres takes up to 65535: execute refuses
-// a Bind given more.
+// a Bind given more, or one they make longer than MAX_MESSAGE.
 fn param(out: u8[>..]&, b: Bind, v: const u8[:]) {
+    guard fits(out, b, 4 + v.len) else { return; }
     put32(out, v.len);
     out.append(v);
     count(out, b);
 }
 
 fn param(out: u8[>..]&, b: Bind, v: i64) {
+    guard fits(out, b, 24) else { return; }
     let at = out.len;
     put32(out, 0);
     format(out, v);
@@ -211,6 +219,7 @@ fn param(out: u8[>..]&, b: Bind, v: bool) { param(out, b, if v { "t" } else { "f
 
 // Adds a NULL parameter to b.
 fn param_null(out: u8[>..]&, b: Bind) {
+    guard fits(out, b, 4) else { return; }
     put32(out, -1);
     count(out, b);
 }
@@ -221,16 +230,24 @@ fn param_null(out: u8[>..]&, b: Bind) {
 // or SUSPENDED at max_rows; ERROR or SKIPPED in place of any of them. A Bind
 // given more than 65535 parameters is dropped from out, with -1, and c goes
 // on: the entries queued before it, such as its statement's Parse, still go.
+// One longer than MAX_MESSAGE is dropped too, and breaks c, as the server
+// would end the session on it.
 fn execute(c: Conn&, out: u8[>..]&, b: Bind, format: i64 = TEXT, max_rows: i64 = 0) -> i64 {
     guard b.ok else {
         out.resize(b.at - 1);
         broken(c, "a statement's or portal's name holds a NUL byte");
         return -1;
     }
-    // count marks a Bind with too many parameters in its length field, which
-    // holds 0 until end.
-    guard get32(out, b.at) == 0 else {
+    // count and fits mark a Bind they refused in its length field, which
+    // holds 0 until end: 1 for too many parameters, 2 for too many bytes.
+    let mark = get32(out, b.at);
+    guard mark != 1 else {
         out.resize(b.at - 1);
+        return -1;
+    }
+    guard mark == 0 && out.len + 4 - b.at <= MAX_MESSAGE else {
+        out.resize(b.at - 1);
+        broken(c, "a message is longer than MAX_MESSAGE");
         return -1;
     }
     put16(out, 1);
@@ -504,6 +521,18 @@ fn count(out: u8[>..]&, b: Bind, added: i64 = 1) {
     }
     out[b.count_at] = (n >> 8) as! u8;
     out[b.count_at + 1] = n as! u8;
+}
+
+// Whether n more bytes keep b, with the 4 that execute adds, within
+// MAX_MESSAGE, so that no length field can wrap; past it b is marked for
+// execute to refuse, and nothing more goes into it.
+fn fits(out: u8[>..]&, b: Bind, n: i64) -> bool {
+    guard get32(out, b.at) == 0 else { return false; }
+    guard out.len + n + 4 - b.at <= MAX_MESSAGE else {
+        patch32(out, b.at, 2);
+        return false;
+    }
+    return true;
 }
 
 // Appends s and its NUL, or nothing, returning false, when s holds a NUL:

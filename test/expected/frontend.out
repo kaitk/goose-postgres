@@ -20,3 +20,11 @@ Parse of SQL with a NUL: -1
 Bind of a name with a NUL, at execute: -1
   out: kept
   a statement's or portal's name holds a NUL byte, ready: false
+-- a message a byte longer than MAX_MESSAGE, refused before it is written
+Parse: -1
+  out: kept
+  a message is longer than MAX_MESSAGE, ready: false
+  out's length, the parameter not copied: 16
+Bind of one parameter, at execute: -1
+  out: kept
+  a message is longer than MAX_MESSAGE, ready: false

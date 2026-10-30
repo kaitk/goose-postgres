@@ -11,3 +11,6 @@ its Parse sent: ok
 rows: 1
 the statement after it, with one: no error
 bound, not parsed again: ok
+a parameter that takes the Bind past MAX_MESSAGE: 08006 a message is longer than MAX_MESSAGE
+nothing sent, its Parse neither: ok
+a query after it: 08003 the connection broke: a message is longer than MAX_MESSAGE
