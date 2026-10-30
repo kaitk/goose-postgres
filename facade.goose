@@ -292,20 +292,20 @@ fn param(out: u8[>..]&, b: Bind, v: Null) { param_null(out, b); }
 // in a loop: pg::param(p, v) adds each in order, and pg::query(db, sql, p) or
 // pg::exec(db, sql, p) runs the statement with them. Each is kept as Bind
 // writes it, its length and its text, so a call copies them in one append.
-// Up to 65535, Postgres's limit; adding more aborts.
+// A query given more than 65535, Postgres's limit, fails with "54023".
 struct Params {
     count: i64 = 0,
     bytes: u8[>..],
 }
 
 fn param(p: Params&, v: const u8[:]) {
-    room_for_one(p);
+    guard room_for_one(p) else { return; }
     put32(p.bytes, v.len);
     p.bytes.append(v);
 }
 
 fn param(p: Params&, v: i64) {
-    room_for_one(p);
+    guard room_for_one(p) else { return; }
     let at = p.bytes.len;
     put32(p.bytes, 0);
     format(p.bytes, v);
@@ -315,7 +315,7 @@ fn param(p: Params&, v: i64) {
 fn param(p: Params&, v: bool) { param(p, if v { "t" } else { "f" }); }
 
 fn param(p: Params&, v: Null) {
-    room_for_one(p);
+    guard room_for_one(p) else { return; }
     put32(p.bytes, -1);
 }
 
@@ -325,9 +325,11 @@ fn param(out: u8[>..]&, b: Bind, p: const Params&) {
     count(out, b, p.count);
 }
 
-fn room_for_one(p: Params&) {
-    if p.count == 65535 { abort("pg: more than 65535 parameters"); }
+// Counts one more parameter, and whether p keeps it: a query refuses a list
+// past 65535, so the bytes of those past it would never be sent.
+fn room_for_one(p: Params&) -> bool {
     p.count++;
+    return p.count <= 65535;
 }
 
 // A row's fields, as the protocol's readers give them (decode.goose).
@@ -406,7 +408,9 @@ fn stale<T>(db: Db<T>&, error: const u8[:]) {
 // READY: each row to F, and the first error, which fails the call once the
 // connection is ready again. Returns the count in the command tag.
 fn finish<F, T>(db: Db<T>&, out: u8[>..]&, b: Bind) -> i64 {
-    execute(db.c, out, b);
+    // -1 for more than 65535 parameters: the Bind is dropped, and the call
+    // fails once the server has answered a Parse before it.
+    let q = execute(db.c, out, b);
     sync(db.c, out);
     transmit(db, out);
     var count = 0;
@@ -435,6 +439,7 @@ fn finish<F, T>(db: Db<T>&, out: u8[>..]&, b: Bind) -> i64 {
         }
     }
     if failed { fail(code, message); }
+    guard q >= 0 else { fail("54023", "more than 65535 parameters, Postgres's limit"); }
     return count;
 }
 

@@ -116,7 +116,9 @@ queues one returns its number, counted from 0 on each connection:
   its results' format, `pg::TEXT` or `pg::BINARY` for all its columns, describes its
   portal, and executes it for at most `max_rows` rows, 0 for all. Its events: `COLUMNS`
   for a query that returns rows, a `ROW` per row, then `DONE`, or `SUSPENDED` at
-  `max_rows`.
+  `max_rows`. A `Bind` given more than 65535 parameters, Postgres's limit, is
+  dropped from `out`, with -1, and `c` goes on: the entries queued before it, such as
+  its statement's `Parse`, are still to be sent.
 - `pg::sync(c, out) -> i64`: ends the entries since the last sync. Those run in one
   implicit transaction, unless a `BEGIN` among them opened one, and the server sends
   nothing for them until it gets the sync or a flush. Its event is `READY`.
@@ -314,9 +316,9 @@ for id in ids { pg::param(p, id); }       // bytes, an integer, a bool, or pg::N
 pg::query(db, sql, p) { r => ... };       // or pg::exec(db, sql, p)
 ```
 
-It holds up to 65535, Postgres's limit; adding more aborts. `p.count` is how many it
-holds. Each is kept encoded, as `Bind` sends it, so a call copies the list in one
-append.
+A query takes up to 65535, Postgres's limit, and fails with `"54023"` given more.
+`p.count` is how many were added. Each is kept encoded, as `Bind` sends it, so a call
+copies the list in one append.
 
 ### Rows
 
@@ -359,6 +361,7 @@ them again.
 | `"08001"` | `pg::SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION` | `pg::connect` or `pg::open` with a URL that isn't a `postgres://` one, one whose `sslmode` needs TLS, settings with a NUL byte, or a socket that can't connect |
 | `"22021"` | `pg::CHARACTER_NOT_IN_REPERTOIRE` | SQL with a NUL byte, refused before it is sent; the connection goes on |
 | `"26000"` | `pg::INVALID_SQL_STATEMENT_NAME` | The server's, for a prepared statement it dropped ([Statements](#statements)) |
+| `"54023"` | | More than 65535 parameters, Postgres's limit; the `Bind` isn't sent, and the connection goes on |
 
 Constants name other codes a program tests for, each by its condition's name in
 Postgres's error codes appendix: `pg::UNIQUE_VIOLATION`, `pg::FOREIGN_KEY_VIOLATION`,

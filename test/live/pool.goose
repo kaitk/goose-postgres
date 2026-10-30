@@ -2,9 +2,9 @@
 // scripts/live.sh starts: HttpArena's /async-db at its limits, many requests
 // on two connections, a query past its time limit, clients that go while
 // their query runs, with the pool told and not told, one that goes while its
-// Parse waits and then fails, a server that ends its
-// connections, refuses new ones, and takes them again, and a server nothing
-// listens for. The routes run on serve_epoll's loop; on serve's, each
+// Parse waits and then fails, more than 65535 parameters, a server that ends
+// its connections, refuses new ones, and takes them again, and a server
+// nothing listens for. The routes run on serve_epoll's loop; on serve's, each
 // answers as wait_socket allows there: on io_uring as on epoll, elsewhere
 // with the empty answer.
 //
@@ -28,6 +28,7 @@ let SLEEP: u8 = 4;
 let UNHEARD: u8 = 5;
 let BIG: u8 = 6;
 let GONE: u8 = 7;
+let MANY: u8 = 8;
 
 struct St {
     t: pg::Ticket = pg::Ticket { .. },
@@ -62,6 +63,7 @@ fn handle(ev: http::Event, st: St&, out: http::Reply, db: pg::Pool&, one: pg::Po
         else if path == "/sleep-unheard" { st.route = UNHEARD; }
         else if path == "/big" { st.route = BIG; }
         else if path == "/gone" { st.route = GONE; }
+        else if path == "/many" { st.route = MANY; }
         else {
             http::respond(out, 404, "text/plain", "");
             return;
@@ -75,6 +77,7 @@ fn handle(ev: http::Event, st: St&, out: http::Reply, db: pg::Pool&, one: pg::Po
     else if st.route == SLOW { scalar(ev, st, out, one, "SELECT pg_sleep(1)", 200); }
     else if st.route == BIG { scalar(ev, st, out, one, "SELECT repeat('x', 1000) FROM generate_series(1, 100)", 5000); }
     else if st.route == GONE { scalar(ev, st, out, one, "SELECT v FROM parse_gone", 5000); }
+    else if st.route == MANY { many(ev, st, out, one); }
     else { scalar(ev, st, out, one, "SELECT pg_sleep(0.3)", 5000); }
 }
 
@@ -142,6 +145,19 @@ fn scalar(ev: http::Event, st: St&, out: http::Reply, p: pg::Pool&, sql: const u
         return;
     }
     http::respond(out, 200, "text/plain", v);
+}
+
+// A query given one parameter more than Postgres takes.
+fn many(ev: http::Event, st: St&, out: http::Reply, p: pg::Pool&) {
+    var params = pg::Params { .. };
+    for k in 65536 { pg::param(params, k); }
+    let n = pg::query(p, st.t, out, ev.kind, ev.data, 5000, "SELECT $1::int", params) { r => };
+    if n == pg::WAITS { return; }
+    if n == pg::FAILS {
+        failed(st, out, p);
+        return;
+    }
+    http::respond(out, 200, "text/plain", "");
 }
 
 fn open_count(p: const pg::Pool&) -> i64 {
@@ -386,6 +402,12 @@ fn main() {
     show("the statement that failed to parse", epoll, "/gone");
     show("one the server has, parsed again", epoll, "/pid");
     show_status("and run again", epoll, "/pid");
+
+    print("-- more than 65535 parameters");
+    show("a statement new to the connection", epoll, "/many");
+    show_status("the next query", epoll, "/pid");
+    show("the statement, now prepared", epoll, "/many");
+    show_status("the next query", epoll, "/pid");
 
     var acfg = dbcfg;
     acfg.database.clear();

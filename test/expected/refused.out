@@ -6,3 +6,8 @@ SQL with a NUL: 22021 the SQL holds a NUL byte
 nothing sent: ok
 rows: 1
 a query after it: no error
+65536 parameters: 54023 more than 65535 parameters, Postgres's limit
+its Parse sent: ok
+rows: 1
+the statement after it, with one: no error
+bound, not parsed again: ok

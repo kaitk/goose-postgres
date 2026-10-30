@@ -1,6 +1,6 @@
 // What the facade refuses before sending, against a faked server: settings
-// whose names hold a NUL, and SQL with a NUL, which leaves the connection
-// usable.
+// whose names hold a NUL, SQL with a NUL, and more than 65535 parameters,
+// which leave the connection usable.
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
@@ -28,5 +28,15 @@ fn main() {
     errors("a query after it", pg::run() {
         print("rows: ", pg::query(db, "SELECT n") { r => });
     });
+
+    var many = pg::Params { .. };
+    for k in 65536 { pg::param(many, k); }
+    let before = db.t.parses;
+    errors("65536 parameters", pg::run() { pg::exec(db, "SELECT n WHERE n > $1", many); });
+    check::that("its Parse sent", db.t.parses == before + 1);
+    errors("the statement after it, with one", pg::run() {
+        print("rows: ", pg::query(db, "SELECT n WHERE n > $1", 0) { r => });
+    });
+    check::that("bound, not parsed again", db.t.parses == before + 1);
     pg::close(db);
 }

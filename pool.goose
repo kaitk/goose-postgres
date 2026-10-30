@@ -451,8 +451,11 @@ fn send_query<W>(p: Pool&, t: Ticket&, out: http::Reply, ms: i64, sql: const u8[
     let b = bind(o, name);
     W(Binding { out: o, b: b });
     let q = execute(s.c, o, b);
-    if t.first < 0 { t.first = q; }
-    sync(s.c, o);
+    let y = sync(s.c, o);
+    if t.first < 0 { t.first = if q >= 0 { q } else { y }; }
+    // More than 65535 parameters: the Bind is dropped, and the query fails
+    // with this code once the server has answered the rest.
+    if q < 0 { t.code.append("54023"); }
     guard http::send(s.s, o) == o.len else { return down(p, t, CONNECTION_FAILURE, "sending to the server failed"); }
     return wait(p, t, out, http::READABLE, ms);
 }
@@ -517,6 +520,7 @@ fn answer<R>(p: Pool&, t: Ticket&, out: http::Reply, ms: i64, open: bool) -> i64
             compact(s);
             release(p, t.conn);
             if failed { return fails(p, t, code, message); }
+            guard t.code.len == 0 else { return fails(p, t, "54023", "more than 65535 parameters, Postgres's limit"); }
             t.state = TICKET_DONE;
             return count;
         }

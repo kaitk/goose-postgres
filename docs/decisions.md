@@ -222,10 +222,19 @@ users, is [architecture](architecture.md).
   resizable field a struct may have, so a call copies the list into its `Bind` in
   one append, and a list costs one buffer however many it holds. The same `param`
   overload that adds a value to a `Bind` takes a `Params`, so no `query` overload is
-  added for it. Adding a parameter past 65535 aborts, as queuing past `QUEUE` does:
-  the count can't fit `Bind`'s 16-bit field. It rejects an array of tagged values,
-  one element per parameter, which an ADT array would store with a tag and a
-  variable-size payload each and encode again at every call (2026-10-19).
+  added for it. It rejects an array of tagged values, one element per parameter,
+  which an ADT array would store with a tag and a variable-size payload each and
+  encode again at every call (2026-10-19).
+- **More than 65535 parameters fail the query, not the program.** The count can't
+  fit `Bind`'s 16-bit field. A list may be built from a request, so a parameter past
+  65535 no longer aborts, as it did (2026-10-19): `count` marks the `Bind` in its
+  length field, which holds 0 until `end` writes it, and `execute` drops a marked
+  `Bind` and returns -1 with the connection usable, since the entries before it,
+  such as its statement's `Parse`, may already be queued. The facade and the pool
+  send those with the sync, and fail the query with `"54023"` (`too_many_arguments`)
+  once the server has answered them, so the statement a `Parse` prepared is kept.
+  A `Params` past 65535 counts its parameters without keeping their bytes. The
+  cost: a round trip for a query that never runs (2026-10-30, task 008).
 - **Statements are prepared once per connection, by name.** The first time a
   connection runs a SQL text, the facade sends `Parse` with the name `gp<k>`, in the
   same write as the query, and keeps the text once the server answers `PARSED`; later

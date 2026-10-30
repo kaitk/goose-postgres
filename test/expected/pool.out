@@ -22,6 +22,11 @@ the next query: 200
 the statement that failed to parse: 200 {"items":[],"count":0} (26000 prepared statement "gp4" does not exist)
 one the server has, parsed again: 200 {"items":[],"count":0} (42P05 prepared statement "gp1" already exists)
 and run again: 200
+-- more than 65535 parameters
+a statement new to the connection: 200 {"items":[],"count":0} (54023 more than 65535 parameters, Postgres's limit)
+the next query: 200
+the statement, now prepared: 200 {"items":[],"count":0} (54023 more than 65535 parameters, Postgres's limit)
+the next query: 200
 -- the server ends every session
 limit 20: ok
 connections open: 200 2

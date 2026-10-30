@@ -3,3 +3,13 @@ bytes: \00\00\00\02ab\00\00\00\03-12\00\00\00\01f\ff\ff\ff\ff
 parameters in the Bind: 5
 40000 parameters, unsigned: 40000
 the most Postgres takes: 65535
+-- past 65535, which execute refuses, and the connection goes on
+a Bind of 65535 parameters: its entry: 0
+count: 65536
+the bytes of the first 65535 only: ok
+a Bind of the list: -1
+  out: kept
+a Bind of 65536 NULLs: -1
+  out: kept
+ready: ok
+the next entry: 1

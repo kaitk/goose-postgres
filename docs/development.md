@@ -91,8 +91,9 @@ The areas:
   for what a capture can't show: a connection lost in a result, a FATAL error, a send
   that fails, a row at `Config.max_message`, one over it, and one over the default
   of which only the head arrives, the statement cache's limits and statements the server dropped, and
-  what the facade refuses before sending (`refused`); and a `pg::Params` list as
-  `Bind` writes it, up to 65535 parameters (`params`).
+  what the facade refuses before sending, more than 65535 parameters among it
+  (`refused`); and a `pg::Params` list as `Bind` writes it, up to 65535 parameters,
+  and the `Bind` that `execute` refuses past them (`params`).
 - `test/compile/`: `// error:` fixtures, programs that must not compile: a facade call
   outside `pg::run`, a query inside another's row block, and a program that imports
   `pg.socket` without declaring goose-http.
@@ -165,7 +166,7 @@ the two connections; `pg_sleep(1)` past a 200 ms limit; an answer longer than
 `POOL_INPUT`; clients that go while their query runs, with the pool told at `CLOSED`
 and not, each followed by a query that must find the same backend; a client that goes
 while its query's Parse waits for a lock that a `DROP TABLE` holds, then fails, and
-the queries after it on that connection; a server that ends
+the queries after it on that connection; more than 65535 parameters; a server that ends
 every session (`pg_terminate_backend`), refuses new ones (`ALTER DATABASE benchmark
 ALLOW_CONNECTIONS false`), and takes them again, through an admin connection on
 `pg.socket` to the database `postgres`; and connects refused. It ends with one request

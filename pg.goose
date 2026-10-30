@@ -191,7 +191,8 @@ fn bind(out: u8[>..]&, statement: const u8[:], portal: const u8[:] = "") -> Bind
 }
 
 // Adds a parameter to b, in the text format: bytes as they are, an integer
-// in decimal, a bool as t or f.
+// in decimal, a bool as t or f. Postgres takes up to 65535: execute refuses
+// a Bind given more.
 fn param(out: u8[>..]&, b: Bind, v: const u8[:]) {
     put32(out, v.len);
     out.append(v);
@@ -217,11 +218,19 @@ fn param_null(out: u8[>..]&, b: Bind) {
 // Ends b with its results' format, TEXT or BINARY, then describes and
 // executes its portal, returning at most max_rows rows (0 for all), and
 // returns the query's number. Its events: COLUMNS, a ROW per row, then DONE,
-// or SUSPENDED at max_rows; ERROR or SKIPPED in place of any of them.
+// or SUSPENDED at max_rows; ERROR or SKIPPED in place of any of them. A Bind
+// given more than 65535 parameters is dropped from out, with -1, and c goes
+// on: the entries queued before it, such as its statement's Parse, still go.
 fn execute(c: Conn&, out: u8[>..]&, b: Bind, format: i64 = TEXT, max_rows: i64 = 0) -> i64 {
     guard b.ok else {
         out.resize(b.at - 1);
         broken(c, "a statement's or portal's name holds a NUL byte");
+        return -1;
+    }
+    // count marks a Bind with too many parameters in its length field, which
+    // holds 0 until end.
+    guard get32(out, b.at) == 0 else {
+        out.resize(b.at - 1);
         return -1;
     }
     put16(out, 1);
@@ -486,10 +495,13 @@ fn begin(out: u8[>..]&, kind: u8) -> i64 {
 fn end(out: u8[>..]&, at: i64) { patch32(out, at, out.len - at); }
 
 // Adds added to b's parameter count, an unsigned 16-bit field: Postgres takes
-// up to 65535 parameters.
+// up to 65535 parameters, and past them b is marked for execute to refuse.
 fn count(out: u8[>..]&, b: Bind, added: i64 = 1) {
     let n = ((out[b.count_at] as i64) << 8 | out[b.count_at + 1]) + added;
-    if n > 65535 { abort("pg: more than 65535 parameters"); }
+    guard n <= 65535 else {
+        patch32(out, b.at, 1);
+        return;
+    }
     out[b.count_at] = (n >> 8) as! u8;
     out[b.count_at + 1] = n as! u8;
 }
