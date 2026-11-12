@@ -1,0 +1,47 @@
+connect: no error
+-- one level
+inside, in a transaction: true
+commits: no error
+after it: [1 2 ] in a transaction: false
+pg::fail, two calls down: P0001 no stock for 6
+the block went on: false
+3 and 6 rolled back: [1 2 ] in a transaction: false
+a statement fails: 23505 duplicate key value violates unique constraint "t_pkey"
+the block went on: false
+3 rolled back: [1 2 ] in a transaction: false
+caught: 23505 duplicate key value violates unique constraint "t_pkey"
+the block catches a failed statement: 25P02 an error the block caught failed the transaction, so it rolled back
+4 rolled back: [1 2 ] in a transaction: false
+caught: P0001 enough
+the block catches a failure in a row block: 25P02 an error the block caught failed the transaction, so it rolled back
+4 rolled back: [1 2 ] in a transaction: false
+-- nested
+third: no error
+third, failing: P0001 not 6
+in the second: [1 2 3 4 5 ] in a transaction: true
+second: no error
+three levels: no error
+three levels, committed: [1 2 3 4 5 ] in a transaction: false
+inner: 23505 duplicate key value violates unique constraint "t_pkey"
+the outer block goes on, in a transaction: true
+a statement fails in the inner block: no error
+only 4 undone: [1 2 3 5 ] in a transaction: false
+caught: 23505 duplicate key value violates unique constraint "t_pkey"
+inner: 25P02 current transaction is aborted, commands ignored until end of transaction block
+the inner block catches a failed statement: no error
+only 4 undone: [1 2 3 5 ] in a transaction: false
+inner: no error
+the outer block fails: P0001 not any
+the released inner rows undone too: [1 2 ] in a transaction: false
+inside exec's BEGIN: no error
+inside exec's BEGIN, failing: P0001 not 5
+still in exec's transaction: true
+exec's COMMIT keeps 3 and 4: [1 2 3 4 ] in a transaction: false
+the inner block ends the whole transaction: 25P01 RELEASE SAVEPOINT can only be used in transaction blocks
+the outer block went on: false
+3 rolled back, 4 never inserted: [1 2 ] in a transaction: false
+the connection breaks in the inner block: 57P01 terminating connection due to administrator command
+the outer block went on: false
+run: no error
+after it: 08003 the connection broke: the server ended the connection
+replayed the whole capture: true

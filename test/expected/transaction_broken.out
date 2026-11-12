@@ -1,0 +1,7 @@
+connect: no error
+lost in the block: 08006 receiving from the server failed, or it closed the connection
+a call after it: 08003 the connection broke: receiving from the server failed, or it closed the connection
+run: no error
+connect again: no error
+COMMIT's send fails: 08007 the connection broke before COMMIT's answer, so whether it committed is unknown: sending to the server failed
+run: no error

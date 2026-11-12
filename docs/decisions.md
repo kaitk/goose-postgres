@@ -56,7 +56,7 @@ users, is [architecture](architecture.md).
   Goose can't name the block's result type before calling it, so a block that returns
   a value names a fixed-size type at the call, `pg::transaction<Order>(db) { ... }`,
   and one that builds a non-fixed value writes it into the caller's variables; the
-  facade's task settles the form. It rejects errors returned by value through each
+  facade's task settles the form (settled below, 2026-11-12). It rejects errors returned by value through each
   repository function, which a caller can forget to check, and the stdlib's
   `exception`, for goose-sqlite's reason: a program's own `try` would catch the
   package's errors at the wrong type (2026-10-19, goose-rest's task 052).
@@ -65,6 +65,55 @@ users, is [architecture](architecture.md).
   (below), match goose-sqlite's, so a program's data access reads the same on either
   database. The protocol is events over
   bytes, which SQLite's synchronous calls have no counterpart for (2026-10-19).
+- **`pg::transaction(db) { ... }` is goose-sqlite's block: no parameter, one form,
+  the errors returned.** It runs `BEGIN`, the block inside a `pg::run`, and `COMMIT`;
+  on a failure it runs `ROLLBACK` and returns the error. `pg::fail` leaves the
+  innermost `pg::run`, which inside the block is the transaction's, so a route reads
+  the same against either database, and a block writes what it reads into the
+  caller's variables, as `sqlite::transaction`'s do. A transaction can fail its
+  caller (below), so it compiles only inside a `pg::run` or another transaction. This
+  settles the open parts of "A transaction is a block whose failure path the compiler
+  checks" (2026-10-19), and rejects what task 004 sketched for it: a
+  `pg::transaction<T>` form returning the block's value, which needs a fixed-size type
+  named at the call ([findings](goose-findings.md#a-blocks-result-cant-be-held-across-a-catcher-without-naming-its-type)),
+  a `pg::Tx` parameter that only a transaction hands out, and a `pg::fail` that
+  returns from a catcher only `transaction` calls, so that it compiles only inside a
+  transaction. Each would make a route differ from its goose-sqlite form, and the
+  last would need a second `fail` for code outside a transaction. The cost: a
+  repository function that calls `pg::fail` compiles inside a bare `pg::run` too,
+  where it fails that run rather than roll anything back (2026-11-12).
+- **A transaction inside another is a savepoint, as in goose-sqlite.** The inner
+  block runs `SAVEPOINT goose_postgres`, and `RELEASE goose_postgres` on success or
+  `ROLLBACK TO` then `RELEASE` on failure, which also takes the transaction out of
+  Postgres's failed state, so the outer block goes on. One name serves every depth,
+  since `ROLLBACK TO` and `RELEASE` take the most recent savepoint of a name; a
+  counter by depth would need a field in `Db` for one feature. When the whole
+  transaction has ended inside the inner block, by a `COMMIT` or `ROLLBACK` the block
+  ran or a broken connection, the inner `transaction` fails the enclosing block
+  rather than return the error, so the outer block never goes on in autocommit. This
+  carries out the nesting rule task 004 agreed on 2026-10-19 (2026-11-12).
+- **A transaction whose block caught an error that failed it rolls back and returns
+  `"25P02"`.** Postgres fails every statement after an error in a transaction, and
+  answers `COMMIT` of a failed transaction with the tag `ROLLBACK` and no error, so
+  a block that catches an error with a `pg::run` of its own would otherwise be
+  reported committed. `transaction` reads the answers the block left unread, then
+  checks ReadyForQuery's status, which `Db` already keeps, for `'E'` before it sends
+  `COMMIT`. It rejects reading `COMMIT`'s command tag, which `exec` doesn't return
+  and which would need a facade call of its own. This differs from goose-sqlite, where
+  SQLite undoes only the failed statement and commits the rest (2026-11-12).
+- **A connection that breaks while `COMMIT` waits gives `"08007"`.** The server may
+  have committed before the connection broke, so `transaction` returns
+  `transaction_resolution_unknown`, Postgres's code for that case, rather than the
+  transport's error, which would read as a rollback. A connection that breaks before
+  `COMMIT` is sent gives its own error: the server rolls back a session that ends in a
+  transaction (2026-11-12).
+- **`BEGIN` isn't pipelined with the block's first query, and `transaction` takes no
+  options.** The block's first query isn't known when `BEGIN` goes out, so pipelining
+  it would mean a `BEGIN` queued inside the next facade call, a field in `Db` and code
+  on every call's path for one feature. Isolation levels and read-only transactions
+  are a `SET TRANSACTION` statement at the start of the block, with no parameter to
+  add. Both cost a round trip, which task 003's queries in parallel may revisit
+  (2026-11-12).
 - **The package is `pg`.** The entry is `pg.goose`, and programs write `pg::`, as task
   052's sketch does (2026-10-19).
 - **The extended query protocol only.** Each query is `Bind`, `Describe` of the

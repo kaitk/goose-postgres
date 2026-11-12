@@ -46,5 +46,5 @@ Expected: a way to name a function value's result type, such as `result<F>` or a
 assignment gives, so that `let v, err = guarded() { ... value };` works for any type,
 non-fixed ones built in the caller's destination.
 
-Workaround: `pg::transaction<T>` names a fixed-size `T` at the call, and a block that
-builds a non-fixed value writes it into the caller's variables (task 004).
+Workaround: `pg::transaction` returns only the errors, and its block writes what it
+reads into the caller's variables, as goose-sqlite's does (task 004, 2026-11-12).

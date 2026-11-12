@@ -15,11 +15,10 @@ Two layers go on top of it:
 
 - **A blocking facade, for lane jobs** ([below](#the-facade)). A Plod use case
   that runs several queries runs as one job on a lane and calls `pg::query`,
-  `pg::exec`, `pg::run`, and `pg::fail`, as goose-sqlite's API does, so its code
-  reads top to bottom. It sends and waits on a transport: goose-http's blocking
-  socket, through the module `pg.socket`, or one the caller supplies. The
-  transaction block and queries "in parallel", pipelined on one connection, are
-  still to come.
+  `pg::exec`, `pg::run`, `pg::fail`, and `pg::transaction`, as goose-sqlite's API
+  does, so its code reads top to bottom. It sends and waits on a transport:
+  goose-http's blocking socket, through the module `pg.socket`, or one the caller
+  supplies. Queries "in parallel", pipelined on one connection, are still to come.
 - **A pool on the worker's loop** ([below](#the-pool)), through the module
   `pg.pool`. A route that runs one query, as HttpArena's `/async-db` does, sends it
   on a connection of its worker's pool and waits on the socket on goose-http's loop,
@@ -312,6 +311,8 @@ program.
   the error a call inside it failed with. The innermost `run` catches.
 - `pg::fail(message)` and `pg::fail(code, message)`: leave the innermost `run` with
   the program's own error, `pg::RAISE_EXCEPTION` (`"P0001"`) or `code`.
+- `pg::transaction(db) { ... } -> pg::Error[]`: runs the block in a transaction
+  ([Transactions](#transactions)).
 
 For more than eight parameters, or a list built in a loop, a `pg::Params` holds them:
 
@@ -367,11 +368,13 @@ them again.
 | `"22021"` | `pg::CHARACTER_NOT_IN_REPERTOIRE` | SQL with a NUL byte, refused before it is sent; the connection goes on |
 | `"26000"` | `pg::INVALID_SQL_STATEMENT_NAME` | The server's, for a prepared statement it dropped ([Statements](#statements)) |
 | `"54023"` | | More than 65535 parameters, Postgres's limit; the `Bind` isn't sent, and the connection goes on |
+| `"25P02"` | `pg::IN_FAILED_SQL_TRANSACTION` | The server's, for a statement in a failed transaction, and `pg::transaction`'s, for a block that caught an error that failed its transaction ([Transactions](#transactions)) |
+| `"08007"` | `pg::TRANSACTION_RESOLUTION_UNKNOWN` | The connection broke while `pg::transaction`'s `COMMIT` waited for its answer: the transaction may or may not have committed |
 
 Constants name other codes a program tests for, each by its condition's name in
 Postgres's error codes appendix: `pg::UNIQUE_VIOLATION`, `pg::FOREIGN_KEY_VIOLATION`,
-`pg::NOT_NULL_VIOLATION`, `pg::CHECK_VIOLATION`, `pg::SERIALIZATION_FAILURE`,
-`pg::DEADLOCK_DETECTED`, and `pg::IN_FAILED_SQL_TRANSACTION`. `pg::class(code)` gives
+`pg::NOT_NULL_VIOLATION`, `pg::CHECK_VIOLATION`, `pg::SERIALIZATION_FAILURE`, and
+`pg::DEADLOCK_DETECTED`. `pg::class(code)` gives
 a code's class, such as `"23"` for every integrity constraint violation.
 
 A server's error fails the call once the server is ready again, so the connection
@@ -379,6 +382,94 @@ goes on. A call that leaves early, because its row block failed, leaves answers
 unread, and the next call reads and drops them first. After the transport fails, the
 server sends a FATAL error, or it breaks the protocol, every call fails with
 `"08003"` until `pg::connect` runs again on a new transport.
+
+### Transactions
+
+`pg::transaction(db) { ... }` runs `BEGIN`, the block, and `COMMIT`. When a call in
+the block fails, the block calls `pg::fail`, at any depth, or the `COMMIT` fails, it
+rolls back and returns the error; otherwise it returns an empty array. It must be
+called inside a `pg::run` or another transaction, as the calls in its block are:
+nested, it can fail the enclosing block (below). It reads as goose-sqlite's
+`sqlite::transaction` does, so a use case's data access is written the same way
+against either database. The block writes what it reads into the caller's variables:
+
+```goose
+var order = 0;
+let failed = pg::run() {
+    let errs = pg::transaction(db) {
+        pg::query(db, "INSERT INTO orders (item) VALUES ($1) RETURNING id", item) { r =>
+            order = pg::int(r, 0);
+        };
+        reserve(db, item);           // a function that may pg::fail
+    };
+    for e in errs { print("not ordered: ", e.code, " ", e.message); }
+};
+```
+
+A function that calls `pg::fail` keeps an untyped parameter, `fn reserve(db, item)`
+or a generic one, as any function that can fail does: a fully typed one is checked as
+if called outside `pg::run`.
+
+**Never `return` out of a transaction's block,** nor leave it by any other way than
+its end, a call that fails, or `pg::fail`. A block's `return` returns from the
+function around the block, past the `COMMIT` and the `ROLLBACK` both, and Goose has no
+way to run them on the way out (goose-sqlite's
+[finding](https://github.com/kaitk/goose-sqlite/blob/main/docs/goose-findings.md#a-function-that-takes-a-block-cant-run-cleanup-when-the-block-returns-out)).
+The connection then stays in the transaction: every later `transaction` on it is a
+savepoint inside that one, and nothing commits until the program ends it with
+`pg::exec(db, "COMMIT")` or `"ROLLBACK"`. To leave early, set a variable and let the
+block end, or call `pg::fail`, which rolls back.
+
+After an error inside a transaction, Postgres fails every statement but a rollback
+with `"25P02"`, and `COMMIT` of the failed transaction rolls it back and succeeds,
+with the command tag `ROLLBACK`. So an error the block catches itself, with a
+`pg::run` of its own, fails the whole transaction: the block's other work isn't
+committed around it, as goose-sqlite's is. `transaction` checks before `COMMIT`, and
+for such a block runs `ROLLBACK` and returns `"25P02"` (`pg::IN_FAILED_SQL_TRANSACTION`)
+rather than report a commit that didn't happen. A block that means to try a statement
+and go on puts it in a nested `transaction`, whose failure rolls back only to its
+savepoint.
+
+When the connection breaks while `COMMIT` waits for its answer, the server may have
+committed or not, and `transaction` returns `"08007"`
+(`pg::TRANSACTION_RESOLUTION_UNKNOWN`). A connection that breaks earlier, in the
+block, gives the block's error: the server rolls back a transaction whose session
+ends, and the `ROLLBACK`, which fails on the broken connection, is skipped.
+
+A transaction inside another, whether `transaction` or `pg::exec(db, "BEGIN")` began
+the outer one, is a savepoint: `SAVEPOINT goose_postgres`, the block, and `RELEASE
+goose_postgres`, which keeps the inner block's changes for the outer `COMMIT`. When
+the inner block or its `RELEASE` fails, `ROLLBACK TO goose_postgres` and `RELEASE
+goose_postgres` undo only the inner block's changes and take the transaction out of
+its failed state, the inner `transaction` returns the error, and the outer
+transaction goes on. When the outer one then fails, it undoes the inner changes too.
+Transactions nest to any depth, each undoing only its own. A `RELEASE` after an error
+the inner block caught itself fails with `"25P02"`, so that block rolls back to its
+savepoint, and the outer one goes on.
+
+When the whole transaction has ended inside a nested block, because the block ran
+`COMMIT` or `ROLLBACK` itself or the connection broke, the inner `transaction`
+doesn't return the error: it fails the enclosing block with it, as a call that fails
+does, so the outer block stops at the inner call rather than go on outside any
+transaction, where each later statement would commit on its own. The outer
+`transaction` returns the error, with nothing left to roll back. The error goes to
+the innermost `run` around the inner call, which is the outer transaction's unless
+the program wraps the inner call in a `run` of its own.
+
+`BEGIN` and `SAVEPOINT` each take a round trip of their own before the block's first
+query, and a rollback inside a savepoint two. The transaction runs at the server's
+default isolation level, `READ COMMITTED` unless the server is set otherwise; an
+outermost block that needs another runs `SET TRANSACTION ISOLATION LEVEL ...` as its
+first statement.
+
+What `transaction` doesn't guard against:
+
+- **A savepoint of the program's own named `goose_postgres` meets the package's.**
+  `ROLLBACK TO` and `RELEASE` take the most recent savepoint of a name, so with the
+  program's open inside a nested `transaction`, the package rolls back only to the
+  program's savepoint and releases that one, leaving its own open. Name your
+  savepoints anything else.
+- **A `return` out of the block**, above.
 
 ## The pool
 
@@ -497,7 +588,7 @@ fails; the `Config` the caller passed still holds it.
 
 ## Not yet
 
-- `pg::transaction` and queries in parallel on the facade, as [Layers](#layers) says.
+- Queries in parallel on the facade, as [Layers](#layers) says.
 - Host names for the pool, which goose-http's loop doesn't resolve.
 - A Unix socket's directory in a `postgres://` URL.
 - TLS: the package speaks to the server in the clear, so it suits a server on the same

@@ -1,6 +1,13 @@
 # 004: The transaction block
 
-Status: todo. After task 002; goose-sqlite's task 003 takes the same block.
+Status: done (2026-11-12). After task 002; goose-sqlite's task 003 takes the same block.
+
+Built as goose-sqlite's `sqlite::transaction`: `pg::transaction(db) { ... }` with no
+block parameter and no `<T>` form, returning `Error[]`, with `pg::fail` leaving the
+innermost `pg::run` ([decisions](../docs/decisions.md), 2026-11-12). The sketch and
+the spec findings below are kept as they were; the decisions record what was chosen
+over them. The example in goose-rest's best practices is goose-rest's task 052 to
+port.
 
 A transaction is a block whose failure path the compiler checks (`docs/decisions.md`,
 from goose-rest's task 052): `pg::transaction` runs the block between `BEGIN` and
@@ -108,12 +115,23 @@ block returns out".
 
 ## Acceptance criteria
 
-- [ ] The block's forms and nesting recorded in `docs/decisions.md` and
+- [x] The block's forms and nesting recorded in `docs/decisions.md` and
       `docs/architecture.md`
-- [ ] Commit, rollback on `pg::fail` and on a failed query, each tested live and
-      replayed
-- [ ] `pg::fail` outside a transaction doesn't compile, with a fixture
-- [ ] goose-sqlite's task 003 gives the same block, or records where it differs
-- [ ] `docs/architecture.md` says that a `return` out of the block skips `COMMIT`
+- [x] Commit, rollback on `pg::fail` and on a failed query, each tested live and
+      replayed (`test/session/transaction.goose`)
+- [x] Nested blocks are savepoints, each undoing only its own work; an inner block
+      that ends the whole transaction stops the outer one; tested live and replayed
+- [x] A block that caught an error, which failed its transaction, rolls back and
+      returns `"25P02"`, where `COMMIT` would have rolled back and succeeded
+- [x] A broken connection returns an error and doesn't wait: in the block, nested
+      (live and replayed), and while `COMMIT` waits, `"08007"` (against the fake
+      server, `test/facade/transaction_broken.goose`)
+- [x] `pg::fail` outside a transaction doesn't compile, with a fixture. Narrowed
+      (2026-11-12): `pg::fail` and `pg::transaction` compile inside a bare
+      `pg::run`, as goose-sqlite's do, and not outside one
+      (`test/compile/fail_outside_run.goose`, `transaction_outside_run.goose`)
+- [x] goose-sqlite's task 003 gives the same block, or records where it differs:
+      the same, but for a block that catches an error itself (`docs/decisions.md`)
+- [x] `docs/architecture.md` says that a `return` out of the block skips `COMMIT`
       and `ROLLBACK`, linking goose-sqlite's feature request
-- [ ] `scripts/test.sh` and `scripts/live.sh` pass
+- [x] `scripts/test.sh` and `scripts/live.sh` pass

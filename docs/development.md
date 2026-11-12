@@ -4,7 +4,9 @@ The package is Goose with no C of its own; goose-hash, which it imports for SCRA
 a small C shim that `goose build` compiles, and goose-http, which only the modules
 `pg.socket` and `pg.pool` import, has its socket calls in C. The replayed tests have
 run on macOS on arm64, and the live tests there against Postgres 18.0 in Docker
-(2026-10-19; the pool's on 2026-10-23). They haven't run on Linux or Windows yet.
+(2026-10-19; the pool's on 2026-10-23). Both have run on Linux on x86-64 (Ubuntu
+under WSL 2), the live tests against Postgres 18.4 in Docker (2026-11-12). They
+haven't run on Windows yet.
 
 ## Toolchain
 
@@ -88,17 +90,24 @@ The areas:
   every decoded type and each outcome a pipeline's entry can have (`pipeline`), a
   cleartext login, allowed (`cleartext`) and refused by default
   (`cleartext_refused`), a wrong password (`bad_password`), and the blocking facade's
-  calls, errors, and savepoints (`facade`), and its login (`facade_login`).
+  calls, errors, and savepoints (`facade`), and its login (`facade_login`); and
+  `pg::transaction` (`transaction`): commits, rollbacks on `pg::fail` two calls down
+  and on a failed statement, a block that catches an error itself, in a statement and
+  in a row block, and so fails its `COMMIT`, nested savepoints that each undo only
+  their own work, a transaction begun by `exec`, an inner block that ends the whole
+  transaction, and, last, a connection the server ends inside an inner block.
 - `test/facade/`: the facade against a server `test/fake.goose` fakes in the program,
   for what a capture can't show: a connection lost in a result, a FATAL error, a send
   that fails, a row at `Config.max_message`, one over it, and one over the default
   of which only the head arrives, the statement cache's limits and statements the server dropped, and
   what the facade refuses before sending, more than 65535 parameters and a message
   longer than `MAX_MESSAGE` among it (`refused`); and a `pg::Params` list as `Bind` writes it, up to 65535 parameters,
-  and the `Bind` that `execute` refuses past them (`params`).
+  and the `Bind` that `execute` refuses past them (`params`); and a transaction whose
+  connection is lost in its block, or whose `COMMIT` can't be sent
+  (`transaction_broken`).
 - `test/compile/`: `// error:` fixtures, programs that must not compile: a facade call
-  outside `pg::run`, a query inside another's row block, and a program that imports
-  `pg.socket` without declaring goose-http.
+  outside `pg::run`, `pg::fail` and a `pg::transaction` outside one, a query inside another's row
+  block, and a program that imports `pg.socket` without declaring goose-http.
 
 `test/run_tests.py` skips `test/live/`, whose programs need a server:
 `scripts/live.sh` runs them ([below](#the-socket-test)).

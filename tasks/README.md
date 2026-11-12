@@ -52,7 +52,8 @@ lines follow it:
   blocking socket or a transport the caller supplies, which waits only on goose-rest's
   port of a use case to it; then
   task 003, queries in parallel on one connection, and task 004, the transaction
-  block, which goose-sqlite's task 003 matches. Neither waits on goose-http.
+  block, which goose-sqlite's task 003 matches (done 2026-11-12). Neither waits on
+  goose-http.
 - For HttpArena: task 005, the pool on goose-http's outbound connections (its task
   053), which answers `/async-db`. The pool is built (2026-10-23); Plod's program,
   HttpArena's validation, and a measurement remain.

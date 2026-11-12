@@ -9,9 +9,10 @@ outbound connections ([architecture](docs/architecture.md)).
 
 The protocol works against Postgres 18, and so does a blocking facade for Plod's
 lanes, over goose-http's blocking socket or a transport the program supplies:
-`pg::query` with a block per row, `pg::exec`, and errors through `pg::run`. A pool
-on goose-http's loop, a pool per worker, runs single queries for a route without a
-lane, as HttpArena's `/async-db` asks. A transaction block comes next
+`pg::query` with a block per row, `pg::exec`, errors through `pg::run`, and a
+`pg::transaction` block, nested as savepoints. A pool on goose-http's loop, a pool
+per worker, runs single queries for a route without a lane, as HttpArena's
+`/async-db` asks. Queries in parallel on the facade come next
 ([tasks](tasks/README.md)).
 
 ## Status
@@ -25,7 +26,8 @@ lane, as HttpArena's `/async-db` asks. A transaction block comes next
 | 🟢 | Pipelining | Many queries queued before any result. Each parse, query, and sync ends in one event carrying its number, including those the server skips after an error. |
 | 🟢 | Decoding | `int2`, `int4`, `int8`, `bool`, `text`, `varchar`, `bpchar`, `name`, `json`, and `jsonb`, in either format. |
 | 🟢 | A blocking facade | For Plod's lane jobs: `pg::connect`, `pg::query` with a block per row, `pg::exec`, statements prepared once per connection, and errors through `pg::run` and `pg::fail`, over the program's transport. |
-| 🟡 | Transactions and queries in parallel | A `pg::transaction` block with savepoints, and several queries in one round trip on the facade (tasks 003 and 004). |
+| 🟢 | Transactions | `pg::transaction(db) { ... }` on the facade, as goose-sqlite's: it commits, or rolls back on a failed call or `pg::fail` and returns the error; nested, a savepoint that undoes only its own work. |
+| 🟡 | Queries in parallel | Several queries in one round trip on the facade (task 003). |
 | 🟢 | goose-http's blocking socket as the facade's transport | The module `pg.socket`: `pg::open` over TCP or a Unix socket, with a time limit on each wait. |
 | 🟡 | A pool | The module `pg.pool`: a pool per worker on goose-http's loop, `serve_epoll`'s or io_uring's, opened as requests need it, with a queue for requests that find no idle connection and reconnects after failures. Tested live on macOS; the Plod program for HttpArena's `/async-db` and its measurement are next (task 005). |
 | 🔴 | TLS | Through goose-tls's client mode, for servers that ask for it. Until then a URL with `sslmode=require`, `verify-ca`, or `verify-full` is refused. |
@@ -112,6 +114,17 @@ for e in failed { print(e.code, ": ", e.message); }   // "23505", "P0001", ...
 pg::close(db);
 ```
 
+The same check and update in a transaction, inside the `pg::run`: a failed call or
+`pg::fail` rolls it back, and it returns the error:
+
+```goose
+let errs = pg::transaction(db) {
+    pg::query(db, "SELECT quantity FROM items WHERE id = $1 FOR UPDATE", 7) { r => stock = pg::int(r, 0); };
+    if stock == 0 { pg::fail("out of stock"); }
+    pg::exec(db, "UPDATE items SET quantity = quantity - 1 WHERE id = $1", 7);
+};
+```
+
 Without `pg.socket`, a program needs no goose-http, and the facade runs over any
 fixed-size value with `pg::send`, `pg::receive`, and `pg::close` overloads
 ([architecture](docs/architecture.md#the-transport)), connected with
@@ -166,6 +179,9 @@ The facade ([architecture](docs/architecture.md#the-facade)):
   `pg::query(db, sql, p)` and `pg::exec(db, sql, p)`.
 - `pg::run() { ... } -> pg::Error[]`, `pg::fail(message)`, and
   `pg::fail(code, message)`. `pg::Error` holds a SQLSTATE `code` and a `message`.
+- `pg::transaction(db) { ... } -> pg::Error[]`: `BEGIN`, the block, and `COMMIT`, or
+  a rollback and the error; a savepoint when nested
+  ([architecture](docs/architecture.md#transactions)).
 - `pg::close(db)` and `pg::in_transaction(db)`.
 
 The pool, in `pg.pool` ([architecture](docs/architecture.md#the-pool)):
@@ -211,7 +227,7 @@ tasks/         task tracking (tasks/README.md)
 | Goose compiler | `aardappel/goose` release `v2026.3` (`8511ae3`), which the scripts fetch ([setup](docs/development.md#set-up-the-goose-compiler)) | An official release builds the same on every platform; a commit is pinned only for a fix not yet released |
 | goose-hash | `github.com/kaitk/goose-hash@v0.0.4`, in each file that imports it | SHA-256, HMAC-SHA-256, and PBKDF2 for SCRAM, and `hash::random_bytes` for its nonce |
 | goose-http | `github.com/kaitk/goose-http@v0.5.16`, in `socket.goose`, `pool.goose`, and the programs that import them ([pin](docs/development.md#the-goose-http-pin)) | Its outbound connections: the blocking socket for `pg.socket`, and waiting on a socket on the worker's loop, epoll's and io_uring's; Plod's pin |
-| Postgres | `postgres:18` in `scripts/live.sh`; the captures are from 18.0 | The version HttpArena runs |
+| Postgres | `postgres:18` in `scripts/live.sh`; the captures are from 18.0, `transaction`'s from 18.4 | The version HttpArena runs |
 | Test data | HttpArena `2d85137`'s `data/pgdb-seed.sql`, checked by SHA-256 in `scripts/live.sh` | The `/async-db` profile's table |
 
 Move a pin in its own commit, with the tests that still pass.

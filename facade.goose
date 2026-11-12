@@ -58,7 +58,10 @@ let NOT_NULL_VIOLATION = "23502";
 let CHECK_VIOLATION = "23514";
 let SERIALIZATION_FAILURE = "40001";
 let DEADLOCK_DETECTED = "40P01";
-let IN_FAILED_SQL_TRANSACTION = "25P02";
+let IN_FAILED_SQL_TRANSACTION = "25P02";     // also a transaction whose block
+                                             // caught an error that failed it
+let TRANSACTION_RESOLUTION_UNKNOWN = "08007";   // the connection broke while
+                                                // COMMIT waited for its answer
 
 // The most statements a connection prepares by name, and the bytes of SQL
 // they hold together. Past either, a query parses as the unnamed statement
@@ -96,6 +99,82 @@ let NULL = Null {};
 fn run<F>() -> Error[] {
     F();
     return [];
+}
+
+// Runs F in a transaction on db: BEGIN, then F, then COMMIT. When F, or the
+// COMMIT, fails, rolls back and returns the error; else returns an empty
+// array. A transaction that an error F caught itself left failed doesn't
+// commit: it rolls back and returns IN_FAILED_SQL_TRANSACTION. A connection
+// that breaks while COMMIT waits for its answer gives
+// TRANSACTION_RESOLUTION_UNKNOWN. Inside a transaction already, F runs in a
+// savepoint instead: RELEASE keeps its changes for the outer COMMIT, and a
+// failure rolls back only F's changes and leaves the outer transaction
+// going. When the whole transaction has ended after the failure, or the
+// connection broke, the error fails the enclosing run instead, so the outer
+// block goes no further. F must not return out of its block: that skips
+// COMMIT and ROLLBACK both, and leaves db in the transaction
+// (docs/architecture.md, "Transactions").
+fn transaction<F, T>(db: Db<T>&) -> Error[] {
+    let nested = in_transaction(db);
+    // One name serves every depth: ROLLBACK TO and RELEASE take the most
+    // recent savepoint of the name, which is the innermost transaction's.
+    let failed = run() {
+        exec(db, if nested { "SAVEPOINT goose_postgres" } else { "BEGIN" });
+        for e in run(F) {
+            rollback(db, nested);
+            fail(e.code, e.message);
+        }
+        let ending = run() { commit(db, nested); };
+        for e in ending {
+            rollback(db, nested);
+            fail(e.code, e.message);
+        }
+    };
+    // Going on would run the outer block's later statements outside any
+    // transaction, each committing on its own.
+    if nested && (db.c.state != OPEN || !in_transaction(db)) {
+        for e in failed { fail(e.code, e.message); }
+    }
+    return failed;
+}
+
+// Commits the transaction, or releases the savepoint, of a block that ended.
+fn commit<T>(db: Db<T>&, savepoint: bool) {
+    if savepoint {
+        exec(db, "RELEASE goose_postgres");
+        return;
+    }
+    // COMMIT of a failed transaction rolls it back and succeeds, with the
+    // tag ROLLBACK. The error may be among the answers that a call the block
+    // left early didn't read.
+    if db.c.state == OPEN { drain(db); }
+    guard db.c.status != 'E' else {
+        fail(IN_FAILED_SQL_TRANSACTION, "an error the block caught failed the transaction, so it rolled back");
+    }
+    let sent = db.c.state == OPEN;
+    let committed = run() { exec(db, "COMMIT"); };
+    for e in committed {
+        if sent && db.c.state == BROKEN {
+            fail(TRANSACTION_RESOLUTION_UNKNOWN,
+                 str("the connection broke before COMMIT's answer, so whether it committed is unknown: ", e.message));
+        }
+        fail(e.code, e.message);
+    }
+}
+
+// Ends the transaction, or the savepoint, after a failure. Never fails: on a
+// broken connection these calls fail too, and the error to return is the
+// first.
+fn rollback<T>(db: Db<T>&, savepoint: bool) {
+    guard db.c.state == OPEN && in_transaction(db);
+    let failed = run() {
+        if savepoint {
+            exec(db, "ROLLBACK TO goose_postgres");
+            exec(db, "RELEASE goose_postgres");
+        } else {
+            exec(db, "ROLLBACK");
+        }
+    };
 }
 
 // Leaves the innermost run with an Error of code, the first five bytes of
@@ -352,14 +431,7 @@ fn entry<T>(db: Db<T>&, out: u8[>..]&, sql: const u8[:]) -> Bind {
     // Refused before anything is sent, so the connection stays usable;
     // Postgres refuses a NUL in text with the same code.
     guard !has_nul(sql) else { fail(CHARACTER_NOT_IN_REPERTOIRE, "the SQL holds a NUL byte"); }
-    // A call that failed in its block, or in a transaction's, left its
-    // answers unread.
-    while db.c.count > 0 {
-        let e, body = next(db);
-        if e == PARSED { prepared(db); }
-        if e == ERROR { stale(db, body); }
-        if e == FAILED { lost(db, body); }
-    }
+    drain(db);
     var name: u8[>..] = [];
     let k = statement(db, sql);
     if k >= 0 {
@@ -375,6 +447,17 @@ fn entry<T>(db: Db<T>&, out: u8[>..]&, sql: const u8[:]) -> Bind {
         parse(db.c, out, name, sql);
     }
     return bind(out, name);
+}
+
+// Reads and drops the answers that a call which failed in its block, or in
+// a transaction's, left unread.
+fn drain<T>(db: Db<T>&) {
+    while db.c.count > 0 {
+        let e, body = next(db);
+        if e == PARSED { prepared(db); }
+        if e == ERROR { stale(db, body); }
+        if e == FAILED { lost(db, body); }
+    }
 }
 
 // The number of the statement db prepared for sql, or -1.
