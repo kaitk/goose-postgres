@@ -8,8 +8,8 @@ namespace fake;
 
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
-import pg from "../";
-import check from "./";
+import pg from "../../../";
+import check from "../check/";
 
 // What the server does when a query executes.
 let ROWS = 0;    // sends `rows` rows of one int4 column, n from 1

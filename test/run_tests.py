@@ -6,7 +6,7 @@ its SHA shim, so the runner builds each with `goose build` at -O0 and at -O2,
 as Goose's runner builds a fixture with C of its own, and runs each as a
 process of its own, all in parallel. The first build fetches goose-hash and
 compiles its C, which `goose build` keeps under GOOSE_HOME for the rest. The
-programs under test/session/ replay captures from test/data/ (test/wire.goose);
+programs under test/session/ replay captures from test/data/ (test/lib/wire/wire.goose);
 scripts/live.sh runs them against a server, and the programs under test/live/,
 which need one, only there. A run passes when
 its stdout is test/expected/<name>.out, every nonblank line of

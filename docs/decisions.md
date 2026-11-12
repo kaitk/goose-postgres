@@ -234,8 +234,8 @@ users, is [architecture](architecture.md).
   `pg` (`fn pg::send(t: Socket&, ...)`) by whoever provides `T`, as goose-http's loop
   reaches TLS through overloads that its module `http.tls` adds. The package keeps no
   socket and imports no goose-http; the tests' transport replays captures and runs live
-  through the relay (`test/wire.goose`), and a faked server tests the failures
-  (`test/fake.goose`). goose-http's blocking socket plugs in with three one-line
+  through the relay (`test/lib/wire/wire.goose`), and a faked server tests the
+  failures (`test/lib/fake/fake.goose`). goose-http's blocking socket plugs in with three one-line
   overloads, in an optional module of this package that imports goose-http, as
   `http.tls` does goose-tls, so only programs that import that module declare
   goose-http (agreed 2026-10-19, over the adapter in goose-http or in each program).

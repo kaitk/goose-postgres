@@ -281,8 +281,8 @@ fn pg::close(t: T&)                               // closes it; never fails
 
 The caller opens its transport to the `Config`'s host and port before
 `pg::connect`, and the transport's own timeouts bound each wait. `pg.socket` declares
-the three for `pg::Socket`. The tests have two more: `test/wire.goose` replays
-captures and runs live through the relay, and `test/fake.goose` fakes a server in the
+the three for `pg::Socket`. The tests have two more: `test/lib/wire/wire.goose`
+replays captures and runs live through the relay, and `test/lib/fake/fake.goose` fakes a server in the
 program.
 
 ### Calls

@@ -108,7 +108,7 @@ was checked only for its `ENOSYS` answer: macOS has no io_uring.
    calls `recv` until `EAGAIN`, one empty call per wake; the statement lookup compares
    the SQL text on each query; `whole_answer` walks the message heads once per wake.
 4. A test without a server, for CI: the pool against a backend thread in the program
-   that answers from a capture, as `test/fake.goose` does for the facade.
+   that answers from a capture, as `test/lib/fake/fake.goose` does for the facade.
 
 ### Needs from other repositories
 

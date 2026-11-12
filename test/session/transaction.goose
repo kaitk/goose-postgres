@@ -7,7 +7,7 @@
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
-import wire from "../";
+import wire from "../lib/wire/";
 
 // The rows of t, in order, as "1 2 3 ".
 fn rows<T>(db: pg::Db<T>&) -> u8[>..] {

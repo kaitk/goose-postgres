@@ -3,7 +3,7 @@
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
-import wire from "../";
+import wire from "../lib/wire/";
 
 fn main() {
     var db = pg::Db { t: wire::io(""), .. };

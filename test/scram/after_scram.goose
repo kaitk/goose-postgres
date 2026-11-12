@@ -5,8 +5,8 @@
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
-import check from "../";
-import wire from "../";
+import check from "../lib/check/";
+import wire from "../lib/wire/";
 
 fn main() {
     let cap = embed_file("../data/arena.cap");

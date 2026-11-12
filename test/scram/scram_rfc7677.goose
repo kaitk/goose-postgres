@@ -3,7 +3,7 @@
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
-import check from "../";
+import check from "../lib/check/";
 
 let NONCE = "rOprNGfwEbeRWgbNEkqO";
 let SERVER_FIRST = "r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,s=W22ZaJ0SNY7soEsUEjb6gQ==,i=4096";

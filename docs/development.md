@@ -23,11 +23,11 @@ Use the Goose pin in [README.md](../README.md#pins). The scripts also need:
 
 ## Set up the Goose compiler
 
-The scripts use the Goose release pinned in `scripts/goose.sh` (`v2026.3`, 2026-10-21)
+The scripts use the Goose release pinned in `scripts/goose.sh` (`v2026.4`, 2026-11-12)
 unless told otherwise. The first script that needs the compiler downloads the release's
 archive for the platform from
 [the releases page](https://github.com/aardappel/goose/releases), checks its SHA-256,
-and unpacks it into `build/goose-v2026.3-<platform>/`; later runs reuse it. Run
+and unpacks it into `build/goose-v2026.4-<platform>/`; later runs reuse it. Run
 `scripts/goose.sh` to fetch it and print the compiler's path. Linux on arm64 has no
 release archive, so there the script builds the release's tag from source, as
 `GOOSE_COMMIT` does below.
@@ -96,7 +96,7 @@ The areas:
   in a row block, and so fails its `COMMIT`, nested savepoints that each undo only
   their own work, a transaction begun by `exec`, an inner block that ends the whole
   transaction, and, last, a connection the server ends inside an inner block.
-- `test/facade/`: the facade against a server `test/fake.goose` fakes in the program,
+- `test/facade/`: the facade against a server `test/lib/fake/fake.goose` fakes in the program,
   for what a capture can't show: a connection lost in a result, a FATAL error, a send
   that fails, a row at `Config.max_message`, one over it, and one over the default
   of which only the head arrives, the statement cache's limits and statements the server dropped, and
@@ -114,7 +114,7 @@ The areas:
 
 ### Session tests
 
-A session test is a program that talks to a server through `test/wire.goose`. Under
+A session test is a program that talks to a server through `test/lib/wire/wire.goose`. Under
 `test/run_tests.py` it replays a capture from `test/data/`: it gets the server's
 recorded bytes when it asks for input, and each message it sends must equal the
 recorded one, or it aborts. SCRAM's client nonce is fixed in the tests, so the client's

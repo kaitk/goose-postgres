@@ -5,7 +5,7 @@ import std;
 import base64;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
-import check from "../";
+import check from "../lib/check/";
 
 fn started(c: pg::Conn&, cleartext: bool = true, max_message: i64 = pg::DEFAULT_MAX_MESSAGE) {
     var out: u8[>..] = [];

@@ -4,7 +4,7 @@
 Goose has no sockets outside goose-http, and the package does no I/O, so a
 test program under test/session/ talks to the server through this relay. It
 starts the program with --live, and reads its stdout line by line
-(test/wire.goose has the program's side):
+(test/lib/wire/wire.goose has the program's side):
 
     >hex   bytes for the server: sent on the socket
     <      the program wants the server's next bytes: answered on its stdin

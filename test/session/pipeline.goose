@@ -5,7 +5,7 @@
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
-import wire from "../";
+import wire from "../lib/wire/";
 
 let TYPES = """
     SELECT 1::int2 AS i2, (-32768)::int2 AS i2min, (-2147483648)::int4 AS i4min,

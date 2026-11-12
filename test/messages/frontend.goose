@@ -3,7 +3,7 @@
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
-import check from "../";
+import check from "../lib/check/";
 
 fn main() {
     var c = pg::Conn { .. };

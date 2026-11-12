@@ -4,7 +4,7 @@
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
-import wire from "../";
+import wire from "../lib/wire/";
 
 fn errors(label: const u8[:], failed: const pg::Error[:]) {
     if failed.len == 0 { print(label, ": no error"); }

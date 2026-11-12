@@ -5,8 +5,8 @@
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
-import check from "../";
-import fake from "../";
+import check from "../lib/check/";
+import fake from "../lib/fake/";
 
 fn errors(label: const u8[:], failed: const pg::Error[:]) {
     if failed.len == 0 { print(label, ": no error"); }

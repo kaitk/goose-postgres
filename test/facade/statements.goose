@@ -6,8 +6,8 @@
 import std;
 import hash from "github.com/kaitk/goose-hash@v0.0.4";
 import pg from "../../";
-import check from "../";
-import fake from "../";
+import check from "../lib/check/";
+import fake from "../lib/fake/";
 
 fn run(db: pg::Db<fake::Server>&, sql: const u8[:]) {
     let before = db.t.parses;
